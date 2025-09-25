@@ -28,7 +28,6 @@
     table{width:100%;border-collapse:separate;border-spacing:0;margin-top:8px}
     th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
     th{color:var(--gold);font-weight:700}
-    .pill{display:inline-block;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:.8rem}
   </style>
 </head>
 <body>
@@ -49,9 +48,7 @@
         <div class="col"><label>Name<input id="f-name" placeholder="e.g., Chocolate Cake"></label></div>
         <div class="col">
           <label>Base Unit
-            <select id="f-base">
-              <!-- filled from ALLOWED_UNITS -->
-            </select>
+            <select id="f-base"></select>
           </label>
         </div>
         <div class="col"><label>Price per Base Unit<input id="f-price" type="number" step="0.01" placeholder="e.g., 25.00"></label></div>
@@ -120,19 +117,20 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 
   <script>
+    // --- Admins ---
     const ADMIN_UIDS = new Set([
-      "In9nS195FPamjwoTM8aHDjJRq8r2",
-      "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
+      "In9nS195FPamjwoTM8aHDjJRq8r2", // Jason
+      "csKdZoNF3ufwPVNS1tUmeRFzCnF2"  // Be
     ]);
+
+    // --- Units (same list as tracker) ---
     const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
 
-    function $(id){ return document.getElementById(id); }
-    function fillUnits(sel){
-      sel.innerHTML = "";
-      ALLOWED_UNITS.forEach(u=>{ const o=document.createElement("option"); o.value=o.textContent=u; sel.appendChild(o); });
-    }
+    // --- Helpers ---
+    const $ = id => document.getElementById(id);
+    const fillUnits = sel => { sel.innerHTML=""; ALLOWED_UNITS.forEach(u=>{ const o=document.createElement("option"); o.value=o.textContent=u; sel.appendChild(o); }); };
 
-    // Firebase
+    // --- Firebase ---
     const firebaseConfig = {
       apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
       authDomain: "food-tracker-fd312.firebaseapp.com",
@@ -142,20 +140,34 @@
     const fs   = firebase.firestore();
     const auth = firebase.auth();
 
-    // Simple ping
-    (async function ping(){
-      try{ await fs.collection("__ping").doc("ok").get();
-        $("fb-status").innerHTML='Firebase: <strong class="ok" style="color:var(--green)">connected</strong>';
+    // Solid connection badge: read from catalog (respects rules & auth)
+    async function ping(){
+      try{
+        await fs.collection("catalog").limit(1).get();
+        $("fb-status").innerHTML = 'Firebase: <strong class="ok" style="color:var(--green)">connected</strong>';
       }catch(e){
-        $("fb-status").innerHTML='Firebase: <strong class="err" style="color:#f87171">offline</strong>';
+        $("fb-status").innerHTML = 'Firebase: <strong class="err" style="color:#f87171">offline</strong>';
       }
-    })();
+    }
 
-    // Auth UI
+    // Admin check centralized (also logs UID to console for quick sanity)
+    function isAdmin(){
+      const u = auth.currentUser;
+      console.log("[catalog] current UID:", u?.uid || "(none)");
+      return !!u && ADMIN_UIDS.has(u.uid);
+    }
+    function requireAdmin(){
+      if(!isAdmin()){ alert("Admin login required."); return false; }
+      return true;
+    }
+
+    // Auth UI + re-ping when auth changes
     function applyAuthUI(u){
       $("login-btn").textContent = u ? "Logout" : "Login";
+      ping(); // ping again because rules may depend on auth
     }
     auth.onAuthStateChanged(applyAuthUI);
+
     $("login-btn").onclick = async ()=>{
       if(auth.currentUser){ await auth.signOut(); return; }
       const email=prompt("Admin email:"); if(!email) return;
@@ -164,16 +176,18 @@
       catch(e){ alert(`${e.code||'auth/error'}: ${e.message||e}`); }
     };
 
-    // Data
+    // Live catalog
     const CATALOG = new Map(); // id -> data
     let unsub = null;
-
     function startSub(){
       if (unsub) return;
       unsub = fs.collection("catalog").onSnapshot(s=>{
         CATALOG.clear();
         s.forEach(d=> CATALOG.set(d.id, d.data()));
         render();
+      }, err => {
+        console.error("catalog snapshot error:", err);
+        $("fb-status").innerHTML = 'Firebase: <strong class="err" style="color:#f87171">offline</strong>';
       });
     }
 
@@ -184,8 +198,8 @@
       const rows = [];
       CATALOG.forEach((v,id)=> rows.push({id,...v}));
       rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
-
       const filtered = rows.filter(r=> !q || (r.name||"").toLowerCase().includes(q));
+
       if(!filtered.length){
         const tr=document.createElement("tr"); tr.innerHTML=`<td colspan="6" class="muted">No products found.</td>`; tbody.appendChild(tr); return;
       }
@@ -220,7 +234,7 @@
       });
       tbody.querySelectorAll("[data-del]").forEach(btn=>{
         btn.onclick = async ()=>{
-          if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
+          if(!requireAdmin()) return;
           if(!confirm("Delete this product?")) return;
           try{ await fs.collection("catalog").doc(btn.getAttribute("data-del")).delete(); }
           catch(e){ console.error(e); alert("Delete failed."); }
@@ -235,7 +249,7 @@
     };
 
     $("f-save").onclick = async ()=>{
-      if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
+      if(!requireAdmin()) return;
 
       const name = $("f-name").value.trim();
       const baseUnit = $("f-base").value;
@@ -256,11 +270,11 @@
         }
         $("f-clear").click();
       }catch(e){
-        console.error(e); alert("Save failed.");
+        console.error(e); alert("Save failed: " + (e?.code || e?.message || e));
       }
     };
 
-    // Search / buttons
+    // Search / toolbar
     $("search").oninput = render;
     $("clear").onclick = ()=>{ $("search").value=""; render(); };
 
@@ -272,7 +286,6 @@
       const a=document.createElement("a"); a.href=url; a.download="catalog_export.csv"; a.click(); URL.revokeObjectURL(url);
     };
 
-    // Minimal template: hide admin flags; just the three required columns
     $("blank-csv").onclick = ()=>{
       const rows=[["name","baseUnit","pricePerBase"]];
       const csv=Papa.unparse(rows);
@@ -283,7 +296,7 @@
     $("import").onclick = ()=> $("csv-file").click();
     $("csv-file").addEventListener("change", async ev=>{
       const file=ev.target.files[0]; if(!file) return;
-      if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) { alert("Admin login required."); ev.target.value=""; return; }
+      if(!requireAdmin()) { ev.target.value=""; return; }
       Papa.parse(file,{header:true,skipEmptyLines:true,complete: async (res)=>{
         const rows=res.data||[]; if(!rows.length) return alert("No rows found.");
         let upserts=0, skipped=0;
@@ -293,7 +306,6 @@
             const baseUnit=(r.baseUnit||"each").trim();
             const pricePerBase=parseFloat(r.pricePerBase);
             const idRaw=(r.id||"").trim();
-            // optional columns respected if provided
             const useConversions = String(r.useConversions).toLowerCase()==="true";
             const active = r.active===undefined ? true : String(r.active).toLowerCase()==="true";
 
@@ -311,10 +323,12 @@
 
     // Boot
     fillUnits($("f-base"));
+    ping();
     startSub();
   </script>
 </body>
 </html>
+
 
 
 
