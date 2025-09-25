@@ -6,18 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <style>
-    /* Black + Gold elegant theme (matches Aidan Apps / Keg Calculator vibe) */
+    /* Black + Gold elegant theme */
     :root{
-      --bg:#0b0b0e;        /* near-black */
-      --panel:#121218;     /* deep panel */
-      --ink:#f6f6f6;       /* light text */
-      --muted:#a6a6b0;     /* soft gray */
-      --gold:#d4af37;      /* gold accent */
-      --gold-2:#b99416;    /* richer gold hover */
-      --red:#ef4444;
-      --green:#22c55e;
-      --line:#23232b;
-      --card:#171720;
+      --bg:#0b0b0e; --panel:#121218; --ink:#f6f6f6; --muted:#a6a6b0;
+      --gold:#d4af37; --gold-2:#b99416; --red:#ef4444; --green:#22c55e; --line:#23232b; --card:#171720;
     }
     html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
     a{color:var(--gold);text-decoration:none}
@@ -27,19 +19,31 @@
     h1 .brand{color:var(--gold)}
     .sub{color:var(--muted);font-size:.95rem}
     .status{color:var(--muted);font-size:.92rem}
-    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25)}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25);overflow:visible}
     .section{padding:14px 14px}
     .section h2{margin:4px 0 10px;font-size:1.1rem;color:var(--gold)}
     .row{display:flex;gap:10px;flex-wrap:wrap}
     label{font-weight:600;font-size:.95rem;color:var(--muted)}
-    input, select, button{width:100%;padding:10px 12px;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:1rem}
-    input[readonly]{opacity:.85}
+
+    /* Inputs fill width; buttons auto width by default */
+    input, select {
+      width:100%; padding:10px 12px; box-sizing:border-box; border-radius:12px;
+      border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:1rem;
+      position:relative; z-index:2;
+    }
+    button{
+      padding:10px 12px; box-sizing:border-box; border-radius:12px; border:1px solid var(--line);
+      background:var(--card); color:var(--ink); font-size:1rem; width:auto; display:inline-block;
+    }
     .btn{cursor:pointer;border:1px solid var(--gold);background:transparent;color:var(--gold);transition:.2s}
     .btn:hover{background:var(--gold);color:var(--bg)}
     .btn.primary{background:var(--gold);color:var(--bg);border:1px solid var(--gold)}
     .btn.primary:hover{background:var(--gold-2);border-color:var(--gold-2)}
     .btn.danger{border-color:var(--red);color:var(--red)}
     .btn.danger:hover{background:var(--red);color:#fff}
+    .btn.full{width:100%}
+
+    input[readonly]{opacity:.85}
     .inline{display:inline-block;margin-right:8px}
     .muted{color:var(--muted);font-size:.9rem}
     .ok{color:var(--green)}
@@ -47,7 +51,7 @@
     .spacer{height:12px}
     .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
     .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-    .item{background:var(--card);border:1px solid var(--line);padding:12px;border-radius:12px;margin-bottom:10px}
+    .item{background:var(--card);border:1px solid var(--line);padding:12px;border-radius:12px;margin-bottom:10px;position:relative}
     .total-value{font-size:.95rem;color:#e6e6e6;margin-top:6px}
     .log-entry{background:var(--card);border:1px solid var(--line);padding:10px;border-radius:12px;margin:8px 0}
     .log-entry.completed{opacity:.6}
@@ -57,17 +61,8 @@
     .tag.gold{border-color:var(--gold);color:var(--gold)}
     hr.sep{border:none;border-top:1px solid var(--line);margin:12px 0}
 
-    /* Invoice modal */
-    #invoice-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.82);z-index:1000}
-    #invoice-content{position:absolute;top:5%;left:5%;width:90%;height:90%;background:#fff;border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
-    #invoice-iframe{flex:1;border:none}
-    #invoice-buttons{padding:10px;text-align:right;background:#f0f0f0}
-    #invoice-buttons button{margin-left:8px}
-
     /* Mobile tweaks */
-    @media (max-width:700px){
-      .grid-3,.grid-2{grid-template-columns:1fr}
-    }
+    @media (max-width:700px){ .grid-3,.grid-2{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
@@ -78,7 +73,7 @@
         <div class="sub">Log transfers from <strong>Pro-Bakery</strong> to your locations, with product/units/prices driven by the catalog.</div>
       </div>
       <div>
-        <a class="btn" href="catalog_admin.html" style="margin-right:8px">Catalog Admin</a>
+        <a class="btn admin-only" href="catalog_admin.html" style="margin-right:8px">Catalog Admin</a>
         <span id="fb-status" class="status">Firebase: <em>checking…</em></span>
         <button id="login-btn" type="button" class="btn primary" style="margin-left:10px">Login</button>
       </div>
@@ -100,8 +95,8 @@
       </div>
 
       <div id="items-container" class="spacer"></div>
-      <button id="add-item-btn" type="button" class="btn">Add Item</button>
-      <button id="submit-btn" type="button" class="btn primary">Submit Transfer</button>
+      <button id="add-item-btn" type="button" class="btn full">Add Item</button>
+      <button id="submit-btn" type="button" class="btn primary full">Submit Transfer</button>
       <div class="spacer"></div>
       <div class="muted">Totals and cost are auto-filled from the product catalog. Admins can edit the catalog below.</div>
     </div>
@@ -160,37 +155,22 @@
 
       <!-- Add / Edit form -->
       <div class="grid-3">
-        <label>Name
-          <input id="cat-name" placeholder="e.g., Chocolate Cake">
-        </label>
+        <label>Name <input id="cat-name" placeholder="e.g., Chocolate Cake"></label>
         <label>Base Unit
           <select id="cat-baseunit">
-            <option value="each">each</option>
-            <option value="kg">kg</option>
-            <option value="g">g</option>
-            <option value="lb">lb</option>
-            <option value="L">L</option>
-            <option value="ml">ml</option>
-            <option value="fl oz">fl oz</option>
-            <option value="piece">piece</option>
+            <option value="each">each</option><option value="piece">piece</option>
+            <option value="kg">kg</option><option value="g">g</option><option value="lb">lb</option>
+            <option value="L">L</option><option value="ml">ml</option><option value="fl oz">fl oz</option>
           </select>
         </label>
-        <label>Price per Base Unit
-          <input id="cat-price" type="number" step="0.01" placeholder="e.g., 25.00">
-        </label>
+        <label>Price per Base Unit <input id="cat-price" type="number" step="0.01" placeholder="e.g., 25.00"></label>
       </div>
       <div class="grid-3" style="margin-top:8px;">
         <label>Use Conversions?
-          <select id="cat-useconv">
-            <option value="false">No (base unit only)</option>
-            <option value="true">Yes (offer related units)</option>
-          </select>
+          <select id="cat-useconv"><option value="false">No</option><option value="true">Yes</option></select>
         </label>
         <label>Active?
-          <select id="cat-active">
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </select>
+          <select id="cat-active"><option value="true">Active</option><option value="false">Inactive</option></select>
         </label>
         <div style="display:flex;align-items:flex-end;gap:10px">
           <button id="cat-save" class="btn primary" type="button">Save / Update</button>
@@ -225,6 +205,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
+    const ADMIN_UIDS = new Set([
+      "In9nS195FPamjwoTM8aHDjJRq8r2",
+      "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
+    ]);
     function $(id){ return document.getElementById(id); }
 
     // ----- Initialize Firebase -----
@@ -261,7 +245,7 @@
       const btn = $("login-btn");
       btn.textContent = isOn ? "Logout" : "Login";
       btn.classList.toggle("primary", true);
-      loadLogs();
+      requestLoadLogs(); // serialized refresh (see below)
       refreshCatalogUI(); // keep admin controls in sync
     }
 
@@ -273,24 +257,21 @@
         setAdmin(false);
         return;
       }
-      const email = prompt("Admin email:");
-      if (!email) return;
-      const pw = prompt("Password:");
-      if (pw == null) return;
+      const email = prompt("Admin email:"); if (!email) return;
+      const pw = prompt("Password:"); if (pw == null) return;
       try {
         await auth.signInWithEmailAndPassword(email.trim(), pw);
-        // onAuthStateChanged will flip admin on
       } catch (e) {
         console.error(e);
         alert("Login failed. Check email/password or account access.");
       }
     });
-    auth.onAuthStateChanged(u => setAdmin(!!u));
+    auth.onAuthStateChanged(u => setAdmin(!!u && ADMIN_UIDS.has(u.uid)));
 
     // Quick probe to detect write permission
     (function writeProbe(){
       const store = "__probe";
-      const month = new Date().toISOString().slice(0,7); // YYYY-MM
+      const month = new Date().toISOString().slice(0,7);
       const keyRef = firebase.database().ref(`logs/${store}/${month}`).push();
       const probeRow = { date: "1970-01-01", from: "__probe", to: "__probe", product: "probe", unit: "unit", amount: 0 };
       keyRef.set(probeRow).then(()=> keyRef.remove()).catch(e=>{
@@ -302,40 +283,20 @@
     })();
 
     // ----- Static data -----
-    const locations = ["Beacon","Prohibition","Tulia Osteria","Ce Soir"]; // TO (destination) list
+    const locations = Array.from(new Set(["Beacon","Prohibition","Tulia Osteria","Ce Soir"]));
     let selectedMonth = new Date().toISOString().slice(0,7);
 
-    // Unit conversion helpers (prices stored per baseUnit; convert proportionally)
-    // Factors are multipliers to the BASE unit amount.
+    // Unit conversion helpers
     const unitSystems = {
       each: { units: ["each"], toBase: { "each": 1 } },
       piece: { units: ["piece"], toBase: { "piece": 1 } },
-      L: {
-        units: ["L","ml","fl oz"],
-        toBase: { "L":1, "ml": 1/1000, "fl oz": 1/33.814 } // 1 fl oz ≈ 0.0295735 L
-      },
-      ml: {
-        units: ["ml","L","fl oz"],
-        toBase: { "ml":1, "L":1000, "fl oz": 1000/33.814 }
-      },
-      kg: {
-        units: ["kg","g","lb"],
-        toBase: { "kg":1, "g":1/1000, "lb": 1/2.20462 }
-      },
-      g: {
-        units: ["g","kg","lb"],
-        toBase: { "g":1, "kg":1000, "lb": 1000/2.20462 }
-      },
-      lb: {
-        units: ["lb","kg","g"],
-        toBase: { "lb":1, "kg": 2.20462, "g": 2.20462*1000 }
-      },
-      "fl oz": {
-        units: ["fl oz","L","ml"],
-        toBase: { "fl oz":1, "L":33.814, "ml": 33.814*1000 }
-      }
+      L: { units: ["L","ml","fl oz"], toBase: { "L":1, "ml": 1/1000, "fl oz": 1/33.814 } },
+      ml:{ units: ["ml","L","fl oz"], toBase: { "ml":1, "L":1000, "fl oz": 1000/33.814 } },
+      kg:{ units: ["kg","g","lb"], toBase: { "kg":1, "g":1/1000, "lb": 1/2.20462 } },
+      g:{  units: ["g","kg","lb"], toBase: { "g":1, "kg":1000, "lb": 1000/2.20462 } },
+      lb:{ units: ["lb","kg","g"], toBase: { "lb":1, "kg": 2.20462, "g": 2.20462*1000 } },
+      "fl oz":{ units:["fl oz","L","ml"], toBase: { "fl oz":1, "L":33.814, "ml": 33.814*1000 } }
     };
-
     function allowedUnits(baseUnit, useConversions){
       const sys = unitSystems[baseUnit] || { units:[baseUnit], toBase:{ [baseUnit]:1 } };
       return useConversions ? sys.units : [baseUnit];
@@ -344,8 +305,6 @@
       const sys = unitSystems[baseUnit];
       if(!sys){ return pricePerBase; }
       const toBase = sys.toBase[unit];
-      // If toBase says "unit = X * base", price per unit = pricePerBase * (amount in base per 1 unit)
-      // We defined toBase as how many BASE units are in 1 selected unit → multiply.
       return +(pricePerBase * toBase).toFixed(4);
     }
 
@@ -359,26 +318,21 @@
         catalog.clear();
         snap.forEach(doc=> catalog.set(doc.id, doc.data()));
         refreshCatalogUI();
-      }, err=>{
-        console.error("Catalog subscribe error:", err);
-      });
+      }, err=> console.error("Catalog subscribe error:", err));
     }
 
     function refreshCatalogUI(){
-      // Fill product dropdowns in item rows
       document.querySelectorAll('.item').forEach(row=>{
-        populateProductSelect(row.querySelector('select[name="product"]'), row);
+        const sel = row.querySelector('select[name="product"]');
+        if (sel) populateProductSelect(sel, row);
       });
 
-      // Admin list
       const list = $("catalog-list");
       if (!list) return;
       list.innerHTML = "";
       const rows = [];
-      catalog.forEach((v,id)=>{
-        rows.push({ id, ...v });
-      });
-      rows.sort((a,b)=> a.name.localeCompare(b.name));
+      catalog.forEach((v,id)=> rows.push({ id, ...v }));
+      rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
       rows.forEach(prod=>{
         const div = document.createElement("div");
         div.className = "item";
@@ -397,12 +351,10 @@
         list.appendChild(div);
       });
 
-      // Wire the edit/delete
       list.querySelectorAll('[data-edit]').forEach(btn=>{
         btn.onclick = ()=>{
           const id = btn.getAttribute('data-edit');
-          const p = catalog.get(id);
-          if (!p) return;
+          const p = catalog.get(id); if (!p) return;
           $('cat-name').value = p.name || "";
           $('cat-baseunit').value = p.baseUnit || "each";
           $('cat-price').value = p.pricePerBase ?? "";
@@ -416,26 +368,18 @@
         btn.onclick = async ()=>{
           const id = btn.getAttribute('data-del');
           if (!confirm("Delete this product?")) return;
-          try{
-            await fs.collection('catalog').doc(id).delete();
-          }catch(e){
-            console.error(e); alert("Delete failed.");
-          }
+          try{ await fs.collection('catalog').doc(id).delete(); }
+          catch(e){ console.error(e); alert("Delete failed."); }
         };
       });
     }
 
     $("cat-clear").onclick = ()=>{
-      $('cat-name').value="";
-      $('cat-baseunit').value="each";
-      $('cat-price').value="";
-      $('cat-useconv').value="false";
-      $('cat-active').value="true";
-      delete $('cat-save').dataset.id;
+      $('cat-name').value=""; $('cat-baseunit').value="each"; $('cat-price').value="";
+      $('cat-useconv').value="false"; $('cat-active').value="true"; delete $('cat-save').dataset.id;
     };
-
     $("cat-save").onclick = async ()=>{
-      if (!auth.currentUser) return alert("You must be logged in to edit the catalog.");
+      if (!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
       const name = $('cat-name').value.trim();
       const baseUnit = $('cat-baseunit').value;
       const pricePerBase = parseFloat($('cat-price').value);
@@ -446,16 +390,13 @@
       const existingId = $('cat-save').dataset.id;
       try{
         if (existingId) {
-          await fs.collection('catalog').doc(existingId).set(payload, { merge:true });
+          await fs.collection('catalog').doc(existingId).set(payload, { merge:false }); // overwrite
         } else {
-          // doc id = slug of name
           const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
           await fs.collection('catalog').doc(id || undefined).set(payload);
         }
         $("cat-clear").click();
-      }catch(e){
-        console.error(e); alert("Save failed.");
-      }
+      }catch(e){ console.error(e); alert("Save failed."); }
     };
 
     // ----- Setup UI -----
@@ -473,21 +414,18 @@
       selectEl.innerHTML = "";
       const items = [];
       catalog.forEach((v,id)=>{ if(v.active) items.push({id, ...v}); });
-      items.sort((a,b)=> a.name.localeCompare(b.name));
-      items.forEach(p=>{
-        const o = document.createElement("option");
-        o.value = p.id;
-        o.textContent = p.name;
-        selectEl.appendChild(o);
-      });
+      items.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
       if (items.length === 0) {
         const o = document.createElement("option");
         o.value = ""; o.textContent = "No products (add in catalog)";
         selectEl.appendChild(o);
+      } else {
+        items.forEach(p=>{
+          const o = document.createElement("option");
+          o.value = p.id; o.textContent = p.name; selectEl.appendChild(o);
+        });
+        if (prev && items.some(i=>i.id===prev)) selectEl.value = prev;
       }
-      // restore previous choice if still present
-      if (prev && items.some(i=>i.id===prev)) selectEl.value = prev;
-      // trigger unit/price refresh
       applyProductToRow(rowEl);
     }
 
@@ -500,31 +438,20 @@
 
       const prod = catalog.get(prodSel.value);
       unitSel.innerHTML = "";
-      if (!prod) {
-        cpuInput.value = "";
-        totalDiv.textContent = "";
-        return;
-      }
+      if (!prod) { cpuInput.value=""; totalDiv.textContent=""; return; }
 
       const units = allowedUnits(prod.baseUnit, !!prod.useConversions);
-      units.forEach(u=>{
-        const o = document.createElement("option");
-        o.value = o.textContent = u;
-        unitSel.appendChild(o);
-      });
+      units.forEach(u=>{ const o = document.createElement("option"); o.value=o.textContent=u; unitSel.appendChild(o); });
 
-      // compute initial CPU
-      const cpu = priceForUnit(Number(prod.pricePerBase || 0), prod.baseUnit, unitSel.value);
+      const cpu = priceForUnit(Number(prod.pricePerBase||0), prod.baseUnit, unitSel.value);
       cpuInput.value = Number(cpu).toFixed(2);
 
       function recalc(){
-        // refresh CPU if unit changes
-        const curCPU = priceForUnit(Number(prod.pricePerBase || 0), prod.baseUnit, unitSel.value);
+        const curCPU = priceForUnit(Number(prod.pricePerBase||0), prod.baseUnit, unitSel.value);
         cpuInput.value = Number(curCPU).toFixed(2);
         const qty = parseFloat(qtyInput.value);
         totalDiv.textContent = (!isNaN(qty)) ? `Line Total: $${(qty * curCPU).toFixed(2)}` : "";
       }
-
       unitSel.onchange = recalc;
       qtyInput.oninput = recalc;
       recalc();
@@ -535,42 +462,40 @@
       row.className = "item";
       row.innerHTML = `
         <div class="grid-3">
-          <label>Product
-            <select name="product"></select>
-          </label>
-          <label>Amount
-            <input type="number" name="amount" placeholder="0" min="0" step="0.01">
-          </label>
-          <label>Unit
-            <select name="unit"></select>
-          </label>
+          <label>Product <select name="product"></select></label>
+          <label>Amount <input type="number" name="amount" placeholder="0" min="0" step="0.01"></label>
+          <label>Unit <select name="unit"></select></label>
         </div>
         <div class="grid-2" style="margin-top:8px;">
-          <label>Cost per Unit
-            <input type="number" step="0.01" name="cost" placeholder="$" readonly>
-          </label>
+          <label>Cost per Unit <input type="number" step="0.01" name="cost" placeholder="$" readonly></label>
           <div class="total-value" style="display:flex;align-items:flex-end"></div>
-        </div>
-      `;
+        </div>`;
       $("items-container").appendChild(row);
-      // wire up product select
       const prodSel = row.querySelector('select[name="product"]');
       prodSel.onchange = ()=> applyProductToRow(row);
-      // populate options
       populateProductSelect(prodSel, row);
     }
 
-    // ----- Logs -----
-    async function loadLogs(){
-      $("logs").innerHTML = "";
-      $("current-month").textContent = selectedMonth;
+    // ----- Logs (race-condition safe) -----
+    let loadLogsRunId = 0;
+    function requestLoadLogs(){ loadLogs(++loadLogsRunId); }
+    async function loadLogs(runId){
+      const logsEl = $("logs");
+      const myId = runId ?? ++loadLogsRunId;
+      const frag = document.createDocumentFragment();
+      const monthLabel = $("current-month");
+      monthLabel.textContent = selectedMonth;
+
       for (const store of locations){
         const sec = document.createElement("div");
         sec.className = "item";
         sec.innerHTML = `<h3 style="margin:0 0 8px">${store}</h3>`;
+
         try{
           const snap = await db.ref(`logs/${store}/${selectedMonth}`).once("value");
           const data = snap.val();
+          if (myId !== loadLogsRunId) return; // a newer render started
+
           if(data){
             Object.entries(data).forEach(([key,log])=>{
               const div = document.createElement("div");
@@ -586,11 +511,13 @@
             none.textContent = "No entries.";
             sec.appendChild(none);
           }
-        }catch(e){
-          console.error("Failed to load logs", e);
-        }
-        $("logs").appendChild(sec);
+        }catch(e){ console.error("Failed to load logs", e); }
+
+        frag.appendChild(sec);
       }
+      if (myId !== loadLogsRunId) return;
+      logsEl.innerHTML = "";
+      logsEl.appendChild(frag);
     }
 
     async function addTransfer(){
@@ -617,7 +544,6 @@
           const inLog = { date, from, to, product: productName, unit, costPerUnit: cpu, comment: "", amount:  amt };
 
           const upd = {};
-          // Outgoing reduces Pro-Bakery, incoming increases the destination
           upd[`logs/${from}/${selectedMonth}/${key}`] = out;
           upd[`logs/${to}/${selectedMonth}/${key}`]   = inLog;
 
@@ -629,15 +555,14 @@
         return;
       }
 
-      // success UI reset
       $("items-container").innerHTML = "";
       $("date").valueAsDate = new Date();
       $("to").selectedIndex = 0;
       addItem();
-      loadLogs();
+      requestLoadLogs();
     }
 
-    // ------- Location + Date Range Invoice (unchanged spec, 10×8 landscape) -------
+    // Invoice (unchanged)
     async function buildRangeInvoice(){
       const loc = $("inv-loc").value;
       const s   = $("inv-start").value;
@@ -647,7 +572,6 @@
       const start = new Date(s), end = new Date(e);
       if(end < start) return alert("End date must be after start date.");
 
-      // collect rows
       let rows = [];
       try{
         const snap = await db.ref(`logs/${loc}`).once("value");
@@ -658,166 +582,96 @@
               const d = new Date(l.date);
               if (d >= start && d <= end) {
                 const cpu = Number.isFinite(l.costPerUnit) ? Number(l.costPerUnit) : 0;
-                const amt = Number(l.amount) || 0; // +incoming, -outgoing
+                const amt = Number(l.amount) || 0;
                 const counterparty = amt < 0 ? l.to : l.from;
                 rows.push({
-                  date: l.date,
-                  direction: amt < 0 ? "Out" : "In",
-                  counterparty,
-                  product: l.product,
-                  qty: Math.abs(amt),
-                  unit: l.unit,
-                  cpu,
-                  lineValue: +(amt * cpu).toFixed(2) // signed
+                  date: l.date, direction: amt < 0 ? "Out" : "In", counterparty,
+                  product: l.product, qty: Math.abs(amt), unit: l.unit, cpu,
+                  lineValue: +(amt * cpu).toFixed(2)
                 });
               }
             });
           });
         }
-      }catch(err){
-        console.error("Range invoice read failed", err);
-        return alert("Could not read transfers to build invoice.");
-      }
+      }catch(err){ console.error("Range invoice read failed", err); return alert("Could not read transfers to build invoice."); }
       if (!rows.length) return alert("No transfers found.");
 
-      // sort & totals
       rows.sort((a,b)=> a.date.localeCompare(b.date));
       const incomingTotal = rows.filter(r=>r.direction==="In").reduce((s,r)=>s + r.lineValue, 0);
       const outgoingTotal = rows.filter(r=>r.direction==="Out").reduce((s,r)=>s + r.lineValue, 0);
       const netTotal      = +(incomingTotal + outgoingTotal).toFixed(2);
 
-      // --- PDF: 10x8 in landscape ---
       const { jsPDF } = window.jspdf;
       const W_IN = 10, H_IN = 8;
       const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: [W_IN*72, H_IN*72] });
 
-      const M = 24;
-      const pageW = W_IN*72, pageH = H_IN*72;
+      const M = 24, pageW = W_IN*72, pageH = H_IN*72;
 
-      // header
       doc.setFont("helvetica","bold");  doc.setFontSize(16);
       doc.text(`Invoice (All Transfers for ${loc})`, M, M+6);
       doc.setFont("helvetica","normal"); doc.setFontSize(10);
       [`Location: ${loc}`, `Range: ${s} to ${e}`, `Generated: ${new Date().toISOString().slice(0,19).replace('T',' ')}`]
         .forEach((t,i)=> doc.text(t, M, M+28 + i*14));
 
-      // columns
       const cols = [
-        { key:"date",        label:"Date",         w: 86,  align:"left"  },
-        { key:"direction",   label:"Dir",          w: 38,  align:"left"  },
-        { key:"counterparty",label:"Counterparty", w: 186, align:"left"  },
-        { key:"product",     label:"Product",      w: 136, align:"left"  },
-        { key:"qtyunit",     label:"Qty/Unit",     w: 70,  align:"right" },
-        { key:"cpu",         label:"Unit $",       w: 66,  align:"right" },
-        { key:"lineValue",   label:"Total $",      w: 84,  align:"right" }
+        { key:"date",label:"Date",w:86,align:"left" },{ key:"direction",label:"Dir",w:38,align:"left" },
+        { key:"counterparty",label:"Counterparty",w:186,align:"left" },{ key:"product",label:"Product",w:136,align:"left" },
+        { key:"qtyunit",label:"Qty/Unit",w:70,align:"right" },{ key:"cpu",label:"Unit $",w:66,align:"right" },
+        { key:"lineValue",label:"Total $",w:84,align:"right" }
       ];
-
       let x = M, y = M + 86;
       const colX = cols.map(c => { const cx = x; x += c.w; return cx; });
 
-      // headers
       doc.setFont("courier","bold"); doc.setFontSize(9.5);
-      cols.forEach((c,i)=>{
-        const hx = c.align === "right" ? colX[i] + c.w : colX[i];
-        doc.text(c.label, hx, y, c.align === "right" ? {align:"right"} : undefined);
-      });
+      cols.forEach((c,i)=>{ const hx = c.align==="right"?colX[i]+c.w:colX[i]; doc.text(c.label, hx, y, c.align==="right"?{align:"right"}:undefined); });
 
-      // rows
       doc.setFont("courier","normal"); doc.setFontSize(9.5);
       const rowH = 14; y += rowH;
       const tableRight = colX[colX.length-1] + cols[cols.length-1].w;
-
-      const clip = (str, wPts) => {
-        const maxChars = Math.floor(wPts / 5.8); // courier char width heuristic
-        const s = String(str ?? "");
-        return s.length > maxChars ? s.slice(0, maxChars-1) + "…" : s;
-      };
+      const clip = (str,w)=>{ const s=String(str??""); const max=Math.floor(w/5.8); return s.length>max?s.slice(0,max-1)+"…":s; };
 
       rows.forEach(r=>{
         if (y > pageH - M*4) {
           doc.addPage({orientation:"landscape", unit:"pt", format:[W_IN*72, H_IN*72]});
-          y = M;
-          doc.setFont("courier","bold"); doc.setFontSize(9.5);
-          cols.forEach((c,i)=>{
-            const hx = c.align === "right" ? colX[i] + c.w : colX[i];
-            doc.text(c.label, hx, y, c.align === "right" ? {align:"right"} : undefined);
-          });
-          doc.setFont("courier","normal"); doc.setFontSize(9.5);
-          y += rowH;
+          y = M; doc.setFont("courier","bold"); doc.setFontSize(9.5);
+          cols.forEach((c,i)=>{ const hx = c.align==="right"?colX[i]+c.w:colX[i]; doc.text(c.label, hx, y, c.align==="right"?{align:"right"}:undefined); });
+          doc.setFont("courier","normal"); doc.setFontSize(9.5); y += rowH;
         }
-
         const qtyUnit = `${r.qty}${r.unit ? " " + r.unit : ""}`;
-        const values = [
-          r.date,
-          r.direction,
-          clip(r.counterparty, cols[2].w),
-          clip(r.product,      cols[3].w),
-          qtyUnit,
-          `$${Number(r.cpu||0).toFixed(2)}`,
-          (r.lineValue >= 0 ? "" : "-") + `$${Math.abs(r.lineValue).toFixed(2)}`
-        ];
-
-        values.forEach((val,i)=>{
-          const c = cols[i];
-          const tx = c.align === "right" ? colX[i] + c.w : colX[i];
-          doc.text(String(val), tx, y, c.align === "right" ? {align:"right"} : undefined);
-        });
-
+        const values = [r.date, r.direction, clip(r.counterparty, cols[2].w), clip(r.product, cols[3].w), qtyUnit, `$${Number(r.cpu||0).toFixed(2)}`, (r.lineValue>=0?"":"-")+`$${Math.abs(r.lineValue).toFixed(2)}`];
+        values.forEach((val,i)=>{ const c=cols[i]; const tx=c.align==="right"?colX[i]+c.w:colX[i]; doc.text(String(val), tx, y, c.align==="right"?{align:"right"}:undefined); });
         y += rowH;
       });
 
-      // totals at bottom
       y = Math.max(y + rowH, pageH - M - rowH*3);
       doc.setFont("courier","bold"); doc.setFontSize(10.5);
-      const put = (label, val) => doc.text(`${label}: ${val}`, tableRight, y, {align:"right"});
+      const put = (label,val)=> doc.text(`${label}: ${val}`, tableRight, y, {align:"right"});
       put("Incoming Total", `$${Math.abs(incomingTotal).toFixed(2)}`); y += rowH;
       put("Outgoing Total", `-$${Math.abs(outgoingTotal).toFixed(2)}`); y += rowH;
-      put("Net Total",      (netTotal >= 0 ? "" : "-") + `$${Math.abs(netTotal).toFixed(2)}`);
+      put("Net Total", (netTotal>=0?"":"-")+`$${Math.abs(netTotal).toFixed(2)}`);
 
-      // show
       const filename = `Invoice_${loc}_${s}_${e}.pdf`;
       const blobUri = doc.output("bloburi");
       $("invoice-iframe").src = blobUri;
       $("invoice-modal").style.display = "block";
-      window.__lastPDF = doc;
-      window.__lastPDFName = filename;
+      window.__lastPDF = doc; window.__lastPDFName = filename;
     }
-
-    function closeInvoiceModal(){
-      $("invoice-modal").style.display = "none";
-      $("invoice-iframe").src = "about:blank";
-      window.__lastPDF = null;
-      window.__lastPDFName = null;
-    }
+    function closeInvoiceModal(){ $("invoice-modal").style.display = "none"; $("invoice-iframe").src = "about:blank"; window.__lastPDF=null; window.__lastPDFName=null; }
     $("invoice-cancel").onclick = ()=> closeInvoiceModal();
-    $("invoice-download").onclick = ()=> {
-      if (window.__lastPDF) {
-        const blob = window.__lastPDF.output("blob");
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = window.__lastPDFName || "invoice.pdf";
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-    };
-    $("invoice-print").onclick = ()=> {
-      const iframe = $("invoice-iframe");
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    };
+    $("invoice-download").onclick = ()=> { if (window.__lastPDF) { const blob = window.__lastPDF.output("blob"); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href=url; a.download=window.__lastPDFName||"invoice.pdf"; a.click(); URL.revokeObjectURL(url);} };
+    $("invoice-print").onclick = ()=> { const iframe = $("invoice-iframe"); iframe.contentWindow?.focus(); iframe.contentWindow?.print(); };
 
     // Month nav
     function changeMonth(offset){
       const [y,m] = selectedMonth.split("-").map(Number);
       const d = new Date(y, m-1+offset);
       selectedMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-      loadLogs();
+      requestLoadLogs();
       $("current-month").textContent = selectedMonth;
     }
     window.changeMonth = changeMonth;
 
-    // Reports (unchanged)
+    // Reports
     function exportExcel(){
       db.ref("logs").once("value").then(snapshot=>{
         const wb = XLSX.utils.book_new();
@@ -834,10 +688,7 @@
           XLSX.utils.book_append_sheet(wb,ws,storeSnap.key.slice(0,31));
         });
         XLSX.writeFile(wb,`Transfers_${selectedMonth}.xlsx`);
-      }).catch(e=>{
-        console.error("Export failed", e);
-        alert("Export failed (check connection).");
-      });
+      }).catch(e=>{ console.error("Export failed", e); alert("Export failed (check connection)."); });
     }
     window.exportExcel = exportExcel;
 
@@ -863,47 +714,28 @@
           }
         });
         XLSX.writeFile(wb,`Report_${$("report-start").value}_${$("report-end").value}.xlsx`);
-      }).catch(e=>{
-        console.error("Export by date failed", e);
-        alert("Export by date failed (check connection).");
-      });
+      }).catch(e=>{ console.error("Export by date failed", e); alert("Export by date failed (check connection)."); });
     }
     window.exportDateRange = exportDateRange;
 
     // Bootstrap
     function setupUI(){
-      // date defaults to today
       $("date").valueAsDate = new Date();
-
-      // fill destinations & invoice loc list
-      fillToSelect($("to"));
-      fillToSelect($("inv-loc"));
-
-      // seed report/invoice date pickers
+      const fillToSelect = sel => { sel.innerHTML=""; locations.forEach(loc=>{ const o=document.createElement("option"); o.value=o.textContent=loc; sel.appendChild(o); }); };
+      fillToSelect($("to")); fillToSelect($("inv-loc"));
       const today = new Date().toISOString().slice(0,10);
-      $("report-start").value = today;
-      $("report-end").value   = today;
-      $("inv-start").value    = today;
-      $("inv-end").value      = today;
-
-      // wire buttons
+      $("report-start").value = today; $("report-end").value = today; $("inv-start").value = today; $("inv-end").value = today;
       $("add-item-btn").addEventListener("click", addItem);
       $("submit-btn").addEventListener("click", addTransfer);
       $("build-range-invoice").addEventListener("click", buildRangeInvoice);
-
-      // first row
       addItem();
-
-      // load current month logs
       $("current-month").textContent = selectedMonth;
-      loadLogs();
-
-      // subscribe to catalog updates
+      requestLoadLogs();
       subscribeCatalog();
     }
     setupUI();
 
-    // Idle logout (same logic)
+    // Idle logout
     let idleTimeout;
     function resetIdleTimer(){
       clearTimeout(idleTimeout);
@@ -915,15 +747,12 @@
         }
       },10*60*1000);
     }
-    ["mousemove","keydown","mousedown","touchstart","scroll"].forEach(evt=>{
-      document.addEventListener(evt, resetIdleTimer, false);
-    });
+    ["mousemove","keydown","mousedown","touchstart","scroll"].forEach(evt=>{ document.addEventListener(evt, resetIdleTimer, false); });
     resetIdleTimer();
 
     // Logout on page close
-    window.addEventListener("beforeunload", async ()=>{
-      if(auth.currentUser){ await auth.signOut(); }
-    });
+    window.addEventListener("beforeunload", async ()=>{ if(auth.currentUser){ await auth.signOut(); } });
   </script>
 </body>
 </html>
+
