@@ -6,7 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <style>
-    /* Black + Gold theme */
     :root{
       --bg:#0b0b0e; --panel:#121218; --ink:#f6f6f6; --muted:#a6a6b0;
       --gold:#d4af37; --gold-2:#b99416; --red:#ef4444; --green:#22c55e; --line:#23232b; --card:#171720;
@@ -47,7 +46,7 @@
     .tag{padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:.8rem;color:var(--muted)}
     .tag.gold{border-color:var(--gold);color:var(--gold)}
     hr.sep{border:none;border-top:1px solid var(--line);margin:12px 0}
-    #items-container{margin:10px 0} /* ensure rows push buttons down */
+    #items-container{margin:10px 0} /* keep buttons from overlapping rows */
 
     /* Invoice modal */
     #invoice-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.82);z-index:1000}
@@ -140,7 +139,7 @@
       <button class="btn primary" type="button" id="build-range-invoice" style="margin-top:8px;">Create Invoice (By Location & Date Range)</button>
     </div>
 
-    <!-- Product Catalog mini editor (full editor is catalog_admin.html) -->
+    <!-- Inline Admin Catalog (quick edit) -->
     <div class="panel section admin-only" style="margin-top:14px;">
       <h2>Product Sales Catalog</h2>
       <div class="muted">Edit full details in <a href="catalog_admin.html">Catalog Admin</a>. This mini editor lets you add/update single items.</div>
@@ -167,7 +166,6 @@
           <button id="cat-clear" class="btn" type="button">Clear</button>
         </div>
       </div>
-
       <hr class="sep">
       <div class="muted" style="margin-bottom:6px;">Catalog Items</div>
       <div id="catalog-list"></div>
@@ -186,7 +184,7 @@
     </div>
   </div>
 
-  <!-- Libraries -->
+  <!-- Libraries (order matters) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
@@ -195,14 +193,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
-    /* ------- Admin allow-list ------- */
+    /* ---------- Config & helpers ---------- */
     const ADMIN_UIDS = new Set([
       "In9nS195FPamjwoTM8aHDjJRq8r2",
       "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
     ]);
     const $ = (id)=>document.getElementById(id);
 
-    /* ------- Firebase ------- */
     const firebaseConfig = {
       apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
       authDomain: "food-tracker-fd312.firebaseapp.com",
@@ -213,27 +210,43 @@
       appId: "1:1012475913662:web:81837595030d4b8a8105ef"
     };
     firebase.initializeApp(firebaseConfig);
-    const db  = firebase.database();
-    const fs  = firebase.firestore();
-    const auth= firebase.auth();
+    const db = firebase.database();
+    const fs = firebase.firestore();
+    const auth = firebase.auth();
 
-    // Connection status (Realtime DB)
+    // Surface page-wide JS errors into the status text
+    window.addEventListener('error', e=>{
+      const s = $("fb-status");
+      if (s) s.innerHTML = 'Firebase: <strong class="err">' + (e.message || 'script error') + '</strong>';
+    });
+
+    // Solid connection badge (RTDB .info/connected)
     (function watchFirebaseConnection(){
       const status = $("fb-status");
-      db.ref(".info/connected").on("value", snap => {
-        status.innerHTML = snap.val()
-          ? 'Firebase: <strong class="ok">connected</strong>'
-          : 'Firebase: <strong class="err">offline</strong>';
-      });
+      try{
+        db.ref(".info/connected").on("value",
+          snap => {
+            status.innerHTML = snap.val()
+              ? 'Firebase: <strong class="ok">connected</strong>'
+              : 'Firebase: <strong class="err">offline</strong>';
+          },
+          err => {
+            console.error("RTDB connection check failed:", err);
+            status.innerHTML = 'Firebase: <strong class="err">' + (err.code || 'error') + '</strong>';
+          }
+        );
+      }catch(e){
+        console.error("RTDB not available:", e);
+        status.innerHTML = 'Firebase: <strong class="err">rtdb-missing</strong>';
+      }
     })();
 
-    /* ------- Auth (single source of truth) ------- */
     function applyAuthUI(user){
       const isAdmin = !!user && ADMIN_UIDS.has(user.uid);
       document.body.classList.toggle("admin", isAdmin);
       $("login-btn").textContent = user ? "Logout" : "Login";
-      if (typeof requestLoadLogs === "function") requestLoadLogs();
-      if (typeof refreshCatalogUI === "function") refreshCatalogUI();
+      requestLoadLogs();            // refresh after auth change
+      refreshCatalogUI();           // keep admin UI in sync
     }
     auth.onAuthStateChanged(applyAuthUI);
 
@@ -245,7 +258,7 @@
       catch(e){ console.error(e); alert("Login failed. Check email/password or account access."); }
     });
 
-    // Quick write probe
+    // Probe a tiny write so permission issues show up clearly
     (function writeProbe(){
       const month = new Date().toISOString().slice(0,7);
       const ref = db.ref(`logs/__probe/${month}`).push();
@@ -257,11 +270,10 @@
       });
     })();
 
-    /* ------- App data ------- */
+    /* ---------- App data ---------- */
     const locations = ["Beacon","Prohibition","Tulia Osteria","Ce Soir"];
     let selectedMonth = new Date().toISOString().slice(0,7);
 
-    /* ------- Units + conversions ------- */
     const unitSystems = {
       each:{units:["each"],toBase:{each:1}},
       piece:{units:["piece"],toBase:{piece:1}},
@@ -272,20 +284,21 @@
       lb:{units:["lb","kg","g"],toBase:{lb:1,kg:2.20462,g:2.20462*1000}},
       "fl oz":{units:["fl oz","L","ml"],toBase:{"fl oz":1,L:33.814,ml:33.814*1000}}
     };
-    function allowedUnits(baseUnit,useConversions){
+    const allowedUnits = (baseUnit,useConversions)=>{
       const sys = unitSystems[baseUnit] || {units:[baseUnit],toBase:{[baseUnit]:1}};
       return useConversions ? sys.units : [baseUnit];
-    }
-    function priceForUnit(pricePerBase, baseUnit, unit){
+    };
+    const priceForUnit = (pricePerBase, baseUnit, unit)=>{
       const sys = unitSystems[baseUnit]; if(!sys) return pricePerBase;
       return +(pricePerBase * (sys.toBase[unit]||1)).toFixed(4);
-    }
+    };
 
-    /* ------- Catalog (Firestore) ------- */
-    const catalog = new Map();  // id -> data
+    /* ---------- Catalog (Firestore) ---------- */
+    const catalog = new Map();
     let catalogUnsub=null;
+
     function subscribeCatalog(){
-      if(catalogUnsub) return;
+      if (catalogUnsub) return;
       catalogUnsub = fs.collection("catalog").onSnapshot(snap=>{
         catalog.clear();
         snap.forEach(d=> catalog.set(d.id, d.data()));
@@ -294,25 +307,27 @@
     }
 
     function refreshCatalogUI(){
-      // fill product options for each item row
+      // update all item rows' product selects
       document.querySelectorAll('#items-container .item').forEach(row=>{
         const sel = row.querySelector('select[name="product"]');
         if (sel) populateProductSelect(sel,row);
       });
+
       // admin list
       const list = $("catalog-list"); if(!list) return;
       list.innerHTML = "";
       const rows=[];
       catalog.forEach((v,id)=> rows.push({id,...v}));
       rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
+
       rows.forEach(p=>{
         const div = document.createElement("div");
         div.className="item";
         div.innerHTML = `
           <div class="grid-3">
-            <div><strong>${p.name}</strong><div class="muted">${p.active?"Active":"Inactive"}</div></div>
-            <div>Base Unit: <strong>${p.baseUnit}</strong><br><span class="muted">Conversions: ${p.useConversions?"Yes":"No"}</span></div>
-            <div>Price/Base: <strong>$${Number(p.pricePerBase).toFixed(2)}</strong></div>
+            <div><strong>${p.name||""}</strong><div class="muted">${p.active?"Active":"Inactive"}</div></div>
+            <div>Base Unit: <strong>${p.baseUnit||""}</strong><br><span class="muted">Conversions: ${p.useConversions?"Yes":"No"}</span></div>
+            <div>Price/Base: <strong>$${Number(p.pricePerBase||0).toFixed(2)}</strong></div>
           </div>
           <div style="margin-top:8px;display:flex;gap:8px;">
             <button class="btn" data-edit="${p.id}">Edit</button>
@@ -320,6 +335,7 @@
           </div>`;
         list.appendChild(div);
       });
+
       list.querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=>{
         const id=b.getAttribute('data-edit'); const p=catalog.get(id); if(!p) return;
         $('cat-name').value=p.name||""; $('cat-baseunit').value=p.baseUnit||"each";
@@ -334,8 +350,10 @@
       });
     }
 
-    $("cat-clear").onclick = ()=>{ $('cat-name').value=""; $('cat-baseunit').value="each"; $('cat-price').value="";
-      $('cat-useconv').value="false"; $('cat-active').value="true"; delete $('cat-save').dataset.id; };
+    $("cat-clear").onclick = ()=>{
+      $('cat-name').value=""; $('cat-baseunit').value="each"; $('cat-price').value="";
+      $('cat-useconv').value="false"; $('cat-active').value="true"; delete $('cat-save').dataset.id;
+    };
 
     $("cat-save").onclick = async ()=>{
       if (!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
@@ -355,9 +373,9 @@
       }catch(e){ console.error(e); alert("Save failed."); }
     };
 
-    /* ------- UI helpers ------- */
+    /* ---------- UI helpers ---------- */
     function fillSelect(sel, values){
-      sel.innerHTML="";
+      sel.innerHTML = "";
       values.forEach(v=>{ const o=document.createElement("option"); o.value=o.textContent=v; sel.appendChild(o); });
     }
 
@@ -412,7 +430,7 @@
       populateProductSelect(prodSel,row);
     }
 
-    /* ------- Logs (serialized to avoid doubles) ------- */
+    /* ---------- Logs ---------- */
     let loadLogsRunId=0;
     function requestLoadLogs(){ loadLogs(++loadLogsRunId); }
     async function loadLogs(runId){
@@ -441,15 +459,13 @@
       logsEl.innerHTML=""; logsEl.appendChild(frag);
     }
 
-    /* ------- Submit transfer ------- */
     async function addTransfer(){
       const date=$("date").value; const from="Pro-Bakery"; const to=$("to").value;
       if(!date||!to) return alert("Select a date and destination.");
       selectedMonth=date.slice(0,7);
 
-      // Only read rows from the entry form
       const groups=document.querySelectorAll('#items-container .item');
-      if(!groups.length) return alert("Add at least one item.");
+      if (!groups.length) return alert("Add at least one item.");
 
       try{
         for(const g of groups){
@@ -466,10 +482,11 @@
           await db.ref().update(upd);
         }
       }catch(e){ console.error("Submit failed:", e); return alert("Submit failed: "+(e?.code||e?.message||e)); }
+
       $("items-container").innerHTML=""; $("date").valueAsDate=new Date(); $("to").selectedIndex=0; addItem(); requestLoadLogs();
     }
 
-    /* ------- Invoice ------- */
+    /* ---------- Invoice ---------- */
     async function buildRangeInvoice(){
       const loc=$("inv-loc").value, s=$("inv-start").value, e=$("inv-end").value;
       if(!loc) return alert("Choose a location."); if(!s||!e) return alert("Choose start and end dates.");
@@ -489,7 +506,6 @@
         }
       }catch(err){ console.error("Range invoice read failed", err); return alert("Could not read transfers to build invoice."); }
       if(!rows.length) return alert("No transfers found.");
-
       rows.sort((a,b)=> a.date.localeCompare(b.date));
       const incomingTotal=rows.filter(r=>r.direction==="In").reduce((s,r)=>s+r.lineValue,0);
       const outgoingTotal=rows.filter(r=>r.direction==="Out").reduce((s,r)=>s+r.lineValue,0);
@@ -533,8 +549,7 @@
       put("Outgoing Total", `-$${Math.abs(outgoingTotal).toFixed(2)}`); y+=rowH;
       put("Net Total", (netTotal>=0?"":"-")+`$${Math.abs(netTotal).toFixed(2)}`);
 
-      $("invoice-iframe").src=doc.output("bloburi");
-      $("invoice-modal").style.display="block";
+      $("invoice-iframe").src=doc.output("bloburi"); $("invoice-modal").style.display="block";
       window.__lastPDF=doc; window.__lastPDFName=`Invoice_${loc}_${s}_${e}.pdf`;
     }
     $("invoice-cancel").onclick=()=>{ $("invoice-modal").style.display="none"; $("invoice-iframe").src="about:blank"; window.__lastPDF=null; window.__lastPDFName=null; };
@@ -546,10 +561,11 @@
       const d=new Date(y, m-1+offset);
       selectedMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
       requestLoadLogs();
+      $("current-month").textContent = selectedMonth;
     }
     window.changeMonth=changeMonth;
 
-    /* ------- Reports ------- */
+    /* ---------- Reports ---------- */
     function exportExcel(){
       db.ref("logs").once("value").then(snapshot=>{
         const wb=XLSX.utils.book_new();
@@ -592,7 +608,7 @@
     }
     window.exportDateRange=exportDateRange;
 
-    /* ------- Bootstrap ------- */
+    /* ---------- Bootstrap ---------- */
     (function setupUI(){
       $("date").valueAsDate=new Date();
       fillSelect($("to"),locations); fillSelect($("inv-loc"),locations);
@@ -606,11 +622,11 @@
       subscribeCatalog();
     })();
 
-    /* ------- Idle logout ------- */
+    /* Idle logout */
     let idleTimeout;
-    function resetIdle(){ clearTimeout(idleTimeout);
-      idleTimeout=setTimeout(async()=>{ if(auth.currentUser){ await auth.signOut(); alert("You have been logged out due to 10 minutes of inactivity."); }}, 10*60*1000);
-    }
+    const resetIdle = ()=>{ clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(async ()=>{ if(auth.currentUser){ await auth.signOut(); alert("You have been logged out due to 10 minutes of inactivity."); }}, 10*60*1000);
+    };
     ["mousemove","keydown","mousedown","touchstart","scroll"].forEach(evt=>document.addEventListener(evt, resetIdle,false));
     resetIdle();
     window.addEventListener("beforeunload", async()=>{ if(auth.currentUser){ await auth.signOut(); }});
