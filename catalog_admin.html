@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pro-Bakery — Catalog Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0b0b0e; --panel:#121218; --ink:#f6f6f6; --muted:#a6a6b0;
+      --gold:#d4af37; --gold-2:#b99416; --red:#ef4444; --line:#23232b; --card:#171720;
+    }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    .wrap{max-width:1100px;margin:24px auto;padding:16px}
+    .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{margin:0;font-size:1.7rem}
+    h1 .brand{color:var(--gold)}
+    .sub{color:var(--muted);font-size:.95rem}
+    .status{color:var(--muted);font-size:.92rem}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25);padding:14px}
+    label{font-weight:600;font-size:.95rem;color:var(--muted)}
+    input,select,button{width:100%;padding:10px 12px;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:1rem}
+    input[readonly]{opacity:.85}
+    .btn{cursor:pointer;border:1px solid var(--gold);background:transparent;color:var(--gold);transition:.2s}
+    .btn:hover{background:var(--gold);color:var(--bg)}
+    .btn.primary{background:var(--gold);color:var(--bg);border:1px solid var(--gold)}
+    .btn.primary:hover{background:var(--gold-2);border-color:var(--gold-2)}
+    .btn.danger{border-color:var(--red);color:var(--red)}
+    .btn.danger:hover{background:var(--red);color:#fff}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    .muted{color:var(--muted);font-size:.9rem}
+    .spacer{height:12px}
+    .table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    .tr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 160px;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+    .th{font-weight:700;color:var(--gold)}
+    .search{display:flex;gap:10px}
+    .small{font-size:.85rem}
+    .right{display:flex;gap:8px;justify-content:flex-end}
+    @media(max-width:900px){ .tr{grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 140px} }
+    @media(max-width:700px){ .grid-3,.grid-2{grid-template-columns:1fr} .tr{grid-template-columns:1.4fr 1fr 1fr 1fr 1fr 120px} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h1><span class="brand">Pro-Bakery</span> — Catalog Admin</h1>
+        <div class="sub">Manage the product catalog that powers the Transfer Tracker.</div>
+      </div>
+      <div class="right">
+        <a class="btn" href="probakery_transfer.html" title="Back to tracker">Back to Tracker</a>
+        <span id="fb-status" class="status">Firebase: <em>checking…</em></span>
+        <button id="login-btn" type="button" class="btn primary">Login</button>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:14px">
+      <div class="row search">
+        <input id="search" placeholder="Search products…" />
+        <button id="clear-search" class="btn">Clear</button>
+      </div>
+    </div>
+
+    <!-- Add/Edit form -->
+    <div class="panel" style="margin-bottom:14px">
+      <h2 style="margin:0 0 10px;color:var(--gold)">Add / Edit Product</h2>
+      <div class="grid-3">
+        <label>Name
+          <input id="cat-name" placeholder="e.g., Chocolate Cake">
+        </label>
+        <label>Base Unit
+          <select id="cat-baseunit">
+            <option value="each">each</option>
+            <option value="piece">piece</option>
+            <option value="kg">kg</option>
+            <option value="g">g</option>
+            <option value="lb">lb</option>
+            <option value="L">L</option>
+            <option value="ml">ml</option>
+            <option value="fl oz">fl oz</option>
+          </select>
+        </label>
+        <label>Price per Base Unit
+          <input id="cat-price" type="number" step="0.01" placeholder="e.g., 25.00">
+        </label>
+      </div>
+      <div class="grid-3" style="margin-top:8px">
+        <label>Use Conversions?
+          <select id="cat-useconv">
+            <option value="false">No (base unit only)</option>
+            <option value="true">Yes (offer related units)</option>
+          </select>
+        </label>
+        <label>Active?
+          <select id="cat-active">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+        </label>
+        <div style="display:flex;align-items:flex-end;gap:10px">
+          <button id="cat-save" class="btn primary" type="button">Save / Update</button>
+          <button id="cat-clear" class="btn" type="button">Clear</button>
+        </div>
+      </div>
+      <div class="small muted" id="edit-id" style="margin-top:6px;display:none"></div>
+    </div>
+
+    <!-- Catalog table -->
+    <div class="panel">
+      <h2 style="margin:0 0 10px;color:var(--gold)">Catalog</h2>
+      <div class="tr th">
+        <div>Name</div><div>Base Unit</div><div>Price/Base</div><div>Conversions</div><div>Active</div><div class="right">Actions</div>
+      </div>
+      <div id="rows" style="display:grid;gap:8px;margin-top:6px"></div>
+      <div id="empty" class="muted" style="margin-top:10px;display:none">No products found.</div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+  <script>
+    // ---- Firebase init (same project as your tracker) ----
+    const firebaseConfig = {
+      apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
+      authDomain: "food-tracker-fd312.firebaseapp.com",
+      projectId: "food-tracker-fd312",
+      storageBucket: "food-tracker-fd312.firebasestorage.app",
+      messagingSenderId: "1012475913662",
+      appId: "1:1012475913662:web:81837595030d4b8a8105ef"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const fs   = firebase.firestore();
+
+    const $ = sel => document.querySelector(sel);
+    const rowsEl = $("#rows"), emptyEl = $("#empty");
+
+    // ---- Auth UI ----
+    function setAdmin(isOn){
+      const btn = $("#login-btn");
+      btn.textContent = isOn ? "Logout" : "Login";
+      document.body.classList.toggle("admin", !!isOn);
+    }
+    $("#login-btn").addEventListener("click", async ()=>{
+      const user = auth.currentUser;
+      if (user) { await auth.signOut(); setAdmin(false); return; }
+      const email = prompt("Admin email:"); if(!email) return;
+      const pw = prompt("Password:"); if(pw==null) return;
+      try { await auth.signInWithEmailAndPassword(email.trim(), pw); }
+      catch(e){ console.error(e); alert("Login failed."); }
+    });
+    auth.onAuthStateChanged(u => setAdmin(!!u));
+
+    // ---- Connection hint (just Firestore ping by listing) ----
+    (async ()=>{
+      try {
+        await fs.collection("_ping").limit(1).get();
+        $("#fb-status").innerHTML = 'Firebase: <strong style="color:#22c55e">connected</strong>';
+      } catch {
+        $("#fb-status").innerHTML = 'Firebase: <strong style="color:#f87171">offline</strong>';
+      }
+    })();
+
+    // ---- Live catalog list ----
+    let allDocs = []; // cache for search
+    fs.collection("catalog").onSnapshot(snap=>{
+      allDocs = [];
+      snap.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
+      render(allDocs);
+    }, err=> console.error(err));
+
+    function yesNo(v){ return v ? "Yes" : "No"; }
+    function money(n){ const x = Number(n); return isFinite(x) ? `$${x.toFixed(2)}` : ""; }
+
+    function render(list){
+      // search filter
+      const q = ($("#search").value || "").toLowerCase().trim();
+      const filtered = !q ? list : list.filter(p =>
+        (p.name||"").toLowerCase().includes(q) ||
+        (p.baseUnit||"").toLowerCase().includes(q)
+      );
+
+      rowsEl.innerHTML = "";
+      if (!filtered.length){
+        emptyEl.style.display = "block";
+        return;
+      }
+      emptyEl.style.display = "none";
+
+      filtered.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
+      filtered.forEach(p=>{
+        const row = document.createElement("div");
+        row.className = "tr";
+        row.innerHTML = `
+          <div><strong>${p.name||""}</strong><div class="small muted">${p.id}</div></div>
+          <div>${p.baseUnit||""}</div>
+          <div>${money(p.pricePerBase)}</div>
+          <div>${yesNo(!!p.useConversions)}</div>
+          <div>${yesNo(!!p.active)}</div>
+          <div class="right">
+            <button class="btn" data-edit="${p.id}">Edit</button>
+            <button class="btn danger" data-del="${p.id}">Delete</button>
+          </div>
+        `;
+        rowsEl.appendChild(row);
+      });
+
+      // wire actions
+      rowsEl.querySelectorAll("[data-edit]").forEach(btn=>{
+        btn.onclick = ()=>{
+          const id = btn.getAttribute("data-edit");
+          const p = allDocs.find(x => x.id === id);
+          if(!p) return;
+          $("#cat-name").value = p.name || "";
+          $("#cat-baseunit").value = p.baseUnit || "each";
+          $("#cat-price").value = p.pricePerBase ?? "";
+          $("#cat-useconv").value = String(!!p.useConversions);
+          $("#cat-active").value = String(!!p.active);
+          $("#cat-save").dataset.id = id;
+          const idBox = $("#edit-id");
+          idBox.style.display = "block";
+          idBox.textContent = "Editing ID: " + id;
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+      });
+      rowsEl.querySelectorAll("[data-del]").forEach(btn=>{
+        btn.onclick = async ()=>{
+          const id = btn.getAttribute("data-del");
+          if(!auth.currentUser) return alert("Login required to delete.");
+          if(!confirm("Delete this product?")) return;
+          try { await fs.collection("catalog").doc(id).delete(); }
+          catch(e){ console.error(e); alert("Delete failed."); }
+        };
+      });
+    }
+
+    // Search box handlers
+    $("#search").addEventListener("input", ()=> render(allDocs));
+    $("#clear-search").addEventListener("click", ()=>{ $("#search").value=""; render(allDocs); });
+
+    // ---- Save / Clear ----
+    $("#cat-clear").addEventListener("click", ()=>{
+      $("#cat-name").value="";
+      $("#cat-baseunit").value="each";
+      $("#cat-price").value="";
+      $("#cat-useconv").value="false";
+      $("#cat-active").value="true";
+      delete $("#cat-save").dataset.id;
+      const idBox = $("#edit-id");
+      idBox.style.display="none";
+      idBox.textContent="";
+    });
+
+    function slug(s){
+      return (s||"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
+    }
+
+    $("#cat-save").addEventListener("click", async ()=>{
+      if(!auth.currentUser) return alert("Login required to save.");
+      const name = $("#cat-name").value.trim();
+      const baseUnit = $("#cat-baseunit").value;
+      const pricePerBase = parseFloat($("#cat-price").value);
+      const useConversions = $("#cat-useconv").value === "true";
+      const active = $("#cat-active").value === "true";
+      if(!name || isNaN(pricePerBase)) return alert("Please fill Name and Price.");
+      // Validate allowed base units
+      const allowed = ["each","piece","kg","g","lb","L","ml","fl oz"];
+      if(!allowed.includes(baseUnit)) return alert("Invalid base unit.");
+
+      const payload = { name, baseUnit, pricePerBase, useConversions, active };
+      const existing = $("#cat-save").dataset.id;
+
+      try{
+        if(existing){
+          await fs.collection("catalog").doc(existing).set(payload, { merge:true });
+        } else {
+          const id = slug(name) || undefined; // undefined -> auto-id
+          await fs.collection("catalog").doc(id).set(payload);
+        }
+        $("#cat-clear").click();
+      }catch(e){
+        console.error(e); alert("Save failed.");
+      }
+    });
+  </script>
+</body>
+</html>
