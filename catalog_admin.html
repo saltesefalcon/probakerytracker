@@ -235,29 +235,56 @@
       $("useconv").value="false"; $("active").value="true";
     };
 
+    /* Save / Update */
     $("save").onclick = async ()=>{
-      if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
-      const name=$("name").value.trim();
-      const baseUnit=$("baseUnit").value;
-      const pricePerBase=parseFloat($("price").value);
-      const useConversions=$("useconv").value==="true";
-      const active=$("active").value==="true";
-      if(!name || !ALLOWED_UNITS.includes(baseUnit) || isNaN(pricePerBase)) return alert("Fill name, base unit, and price.");
-
-      const payload={name,baseUnit,pricePerBase,useConversions,active};
-      try{
-        if(editId){
-          await fs.collection("catalog").doc(editId).set(payload,{merge:false});
-        }else{
-          const id = name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
-          await fs.collection("catalog").doc(id||undefined).set(payload,{merge:false});
+      // make sure we see the fresh auth state
+      try { await auth.currentUser?.reload(); } catch(e) {}
+      const u = auth.currentUser;
+    
+      // must be logged in AND on the admin allow-list
+      if (!u || !ADMIN_UIDS.has(u.uid)) {
+        alert("Admin login required.");
+        return;
+      }
+    
+      // read form
+      const name           = $("name").value.trim();
+      const baseUnit       = $("baseUnit").value;
+      const pricePerBase   = parseFloat($("price").value);
+      const useConversions = $("useconv").value === "true";
+      const active         = $("active").value === "true";
+    
+      // basic validation
+      if (!name || !ALLOWED_UNITS.includes(baseUnit) || Number.isNaN(pricePerBase)) {
+        alert("Fill name, base unit, and price.");
+        return;
+      }
+    
+      const payload = { name, baseUnit, pricePerBase, useConversions, active };
+    
+      try {
+        if (editId) {
+          // editing existing item
+          await fs.collection("catalog").doc(editId).set(payload, { merge: false });
+        } else {
+          // creating new item with a slug id from the name
+          const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+          await fs.collection("catalog").doc(id).set(payload, { merge: false });
         }
-        $("clear").click();
-      }catch(e){
+    
+        // clear form
+        editId = null;
+        $("name").value = "";
+        $("baseUnit").value = "each";
+        $("price").value = "";
+        $("useconv").value = "false";
+        $("active").value = "true";
+      } catch (e) {
         console.error(e);
-        alert(e.code === "permission-denied" ? "Permission denied by Firestore rules." : "Save failed.");
+        alert("Save failed.");
       }
     };
+
 
     /* CSV */
     $("export").onclick = ()=>{
