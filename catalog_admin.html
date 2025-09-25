@@ -33,13 +33,13 @@
     .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
     .muted{color:var(--muted);font-size:.9rem}
     .spacer{height:12px}
-    .table{width:100%;border-collapse:separate;border-spacing:0 8px}
     .tr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 120px;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
     .th{font-weight:700;color:var(--gold)}
     .small{font-size:.85rem}
     .right{display:flex;gap:8px;justify-content:flex-end}
     .admin-only{display:none}
     body.admin .admin-only{display:block}
+    .admin-btns{display:flex;gap:8px;flex-wrap:wrap} /* replaces inline display:flex */
     @media(max-width:900px){ .tr{grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 110px} }
     @media(max-width:700px){ .grid-3,.grid-2{grid-template-columns:1fr} .tr{grid-template-columns:1.4fr 1fr 1fr 1fr 1fr 100px} }
   </style>
@@ -62,7 +62,9 @@
       <div class="row" style="gap:10px;align-items:center">
         <input id="search" placeholder="Search products…" style="flex:1" />
         <button id="clear-search" class="btn">Clear</button>
-        <div class="admin-only" style="display:flex;gap:8px;flex-wrap:wrap">
+
+        <!-- Hidden until admin logs in -->
+        <div class="admin-only admin-btns">
           <button id="csv-export" class="btn">Export CSV</button>
           <button id="csv-template" class="btn">Download Blank CSV</button>
           <button id="csv-template-print" class="btn">Print Blank Template</button>
@@ -81,9 +83,7 @@
     <div class="panel admin-only" style="margin-bottom:14px">
       <h2 style="margin:0 0 10px;color:var(--gold)">Add / Edit Product</h2>
       <div class="grid-3">
-        <label>Name
-          <input id="cat-name" placeholder="e.g., Chocolate Cake">
-        </label>
+        <label>Name <input id="cat-name" placeholder="e.g., Chocolate Cake"></label>
         <label>Base Unit
           <select id="cat-baseunit">
             <option value="each">each</option><option value="piece">piece</option>
@@ -91,9 +91,7 @@
             <option value="L">L</option><option value="ml">ml</option><option value="fl oz">fl oz</option>
           </select>
         </label>
-        <label>Price per Base Unit
-          <input id="cat-price" type="number" step="0.01" placeholder="e.g., 25.00">
-        </label>
+        <label>Price per Base Unit <input id="cat-price" type="number" step="0.01" placeholder="e.g., 25.00"></label>
       </div>
       <div class="grid-3" style="margin-top:8px">
         <label>Use Conversions?
@@ -133,7 +131,7 @@
       "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
     ]);
 
-    // ---- Firebase init (same project as tracker) ----
+    // ---- Firebase init ----
     const firebaseConfig = {
       apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
       authDomain: "food-tracker-fd312.firebaseapp.com",
@@ -167,16 +165,13 @@
 
     // ---- Connection hint ----
     (async ()=>{
-      try {
-        await fs.collection("_ping").limit(1).get();
+      try { await fs.collection("_ping").limit(1).get();
         $("#fb-status").innerHTML = 'Firebase: <strong style="color:#22c55e">connected</strong>';
-      } catch {
-        $("#fb-status").innerHTML = 'Firebase: <strong style="color:#f87171">offline</strong>';
-      }
+      } catch { $("#fb-status").innerHTML = 'Firebase: <strong style="color:#f87171">offline</strong>'; }
     })();
 
     // ---- Live catalog list ----
-    let allDocs = []; // cache for search
+    let allDocs = [];
     fs.collection("catalog").onSnapshot(snap=>{
       allDocs = [];
       snap.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
@@ -240,7 +235,7 @@
       });
     }
 
-    // Search handlers
+    // Search
     $("#search").addEventListener("input", ()=> render(allDocs));
     $("#clear-search").addEventListener("click", ()=>{ $("#search").value=""; render(allDocs); });
 
@@ -272,7 +267,7 @@
       }catch(e){ console.error(e); alert("Save failed."); }
     });
 
-    // ---- CSV Tools (admin-only) ----
+    // ---- CSV Tools ----
     function bool(v, def=false){
       if (typeof v === "boolean") return v;
       if (v==null || v==="") return def;
@@ -288,7 +283,6 @@
         const vals = headers.map(h=>{
           let v = r[h] ?? "";
           if (typeof v === "string"){
-            // escape CSV
             if (v.includes('"') || v.includes(",") || v.includes("\n")) v = '"' + v.replace(/"/g,'""') + '"';
           }
           return v;
@@ -317,19 +311,20 @@
       downloadFile("catalog_template.csv", "text/csv;charset=utf-8", toCSV(rows));
     });
 
-    // Blank template (print)
+    // Blank template (print) — ESCAPED </script> to avoid breaking the main script tag
     $("#csv-template-print").addEventListener("click", ()=>{
       const w = window.open("", "_blank");
-      w.document.write(`
-        <html><head><title>Catalog Template</title>
-        <style>body{font-family:Arial;padding:16px} table{border-collapse:collapse} th,td{border:1px solid #444;padding:6px 10px}</style>
-        </head><body>
-        <h3>Catalog CSV Template</h3>
-        <p>Columns: <b>id</b> (optional), <b>name</b>, <b>baseUnit</b> (each,piece,kg,g,lb,L,ml,"fl oz"), <b>pricePerBase</b> (number), <b>useConversions</b> (true/false), <b>active</b> (true/false)</p>
-        <table><thead><tr><th>id</th><th>name</th><th>baseUnit</th><th>pricePerBase</th><th>useConversions</th><th>active</th></tr></thead>
-        <tbody><tr><td></td><td></td><td>each</td><td></td><td>false</td><td>true</td></tr></tbody></table>
-        <script>window.onload=()=>window.print()</script>
-        </body></html>`);
+      w.document.write(
+        '<html><head><title>Catalog Template</title>' +
+        '<style>body{font-family:Arial;padding:16px} table{border-collapse:collapse} th,td{border:1px solid #444;padding:6px 10px}</style>' +
+        '</head><body>' +
+        '<h3>Catalog CSV Template</h3>' +
+        '<p>Columns: <b>id</b> (optional), <b>name</b>, <b>baseUnit</b> (each,piece,kg,g,lb,L,ml,"fl oz"), <b>pricePerBase</b> (number), <b>useConversions</b> (true/false), <b>active</b> (true/false)</p>' +
+        '<table><thead><tr><th>id</th><th>name</th><th>baseUnit</th><th>pricePerBase</th><th>useConversions</th><th>active</th></tr></thead>' +
+        '<tbody><tr><td></td><td></td><td>each</td><td></td><td>false</td><td>true</td></tr></tbody></table>' +
+        '<script>window.onload=()=>window.print()<\\/script>' +  /* <-- key fix */
+        '</body></html>'
+      );
       w.document.close();
     });
 
@@ -341,7 +336,8 @@
     $("#csv-file").addEventListener("change", async (ev)=>{
       const file = ev.target.files[0]; if(!file) return;
       Papa.parse(file, {
-        header:true, skipEmptyLines:true, complete: async (res)=>{
+        header:true, skipEmptyLines:true,
+        complete: async (res)=>{
           const rows = res.data || [];
           if(!rows.length) return alert("No rows found.");
           let upserts=0, skipped=0;
@@ -349,19 +345,18 @@
             for(const r of rows){
               const name = (r.name||"").trim();
               const idRaw = (r.id||"").trim();
-              let baseUnit = (r.baseUnit||"").trim();
+              let baseUnit = (r.baseUnit||"").trim() || "each";
               const pricePerBase = parseFloat(r.pricePerBase);
               const useConversions = bool(r.useConversions,false);
               const active = bool(r.active,true);
 
               if(!name || !isFinite(pricePerBase)){ skipped++; continue; }
-              baseUnit = baseUnit || "each";
-              if(!ALLOWED_UNITS.includes(baseUnit)) { skipped++; continue; }
+              if(!["each","piece","kg","g","lb","L","ml","fl oz"].includes(baseUnit)) { skipped++; continue; }
 
               const id = (idRaw ? slug(idRaw) : slug(name)) || undefined;
               const payload = { name, baseUnit, pricePerBase, useConversions, active };
-              if (id){ await fs.collection("catalog").doc(id).set(payload, { merge:false }); }
-              else { await fs.collection("catalog").add(payload); }
+              if (id){ await fs.collection("catalog").doc(id).set(payload, { merge:false }); } // overwrite existing id
+              else { await fs.collection("catalog").add(payload); } // fallback (shouldn't happen if name present)
               upserts++;
             }
             alert(`Import complete.\nUpserted: ${upserts}\nSkipped: ${skipped}`);
@@ -377,4 +372,5 @@
   </script>
 </body>
 </html>
+
 
