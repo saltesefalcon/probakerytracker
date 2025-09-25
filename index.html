@@ -140,7 +140,7 @@
       <button class="btn primary" type="button" id="build-range-invoice" style="margin-top:8px;">Create Invoice (By Location & Date Range)</button>
     </div>
 
-    <!-- Admin catalog editor (inline quick editor is kept minimal on tracker page) -->
+    <!-- Product Catalog mini editor (full editor is catalog_admin.html) -->
     <div class="panel section admin-only" style="margin-top:14px;">
       <h2>Product Sales Catalog</h2>
       <div class="muted">Edit full details in <a href="catalog_admin.html">Catalog Admin</a>. This mini editor lets you add/update single items.</div>
@@ -195,13 +195,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
+    /* ------- Admin allow-list ------- */
     const ADMIN_UIDS = new Set([
       "In9nS195FPamjwoTM8aHDjJRq8r2",
       "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
     ]);
-    function $(id){ return document.getElementById(id); }
+    const $ = (id)=>document.getElementById(id);
 
-    /* Firebase */
+    /* ------- Firebase ------- */
     const firebaseConfig = {
       apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
       authDomain: "food-tracker-fd312.firebaseapp.com",
@@ -216,20 +217,23 @@
     const fs  = firebase.firestore();
     const auth= firebase.auth();
 
+    // Connection status (Realtime DB)
     (function watchFirebaseConnection(){
       const status = $("fb-status");
       db.ref(".info/connected").on("value", snap => {
-        status.innerHTML = snap.val() ? 'Firebase: <strong class="ok">connected</strong>'
-                                      : 'Firebase: <strong class="err">offline</strong>';
+        status.innerHTML = snap.val()
+          ? 'Firebase: <strong class="ok">connected</strong>'
+          : 'Firebase: <strong class="err">offline</strong>';
       });
     })();
 
+    /* ------- Auth (single source of truth) ------- */
     function applyAuthUI(user){
       const isAdmin = !!user && ADMIN_UIDS.has(user.uid);
       document.body.classList.toggle("admin", isAdmin);
       $("login-btn").textContent = user ? "Logout" : "Login";
-      requestLoadLogs();            // refresh after auth change
-      refreshCatalogUI();           // keep admin UI in sync
+      if (typeof requestLoadLogs === "function") requestLoadLogs();
+      if (typeof refreshCatalogUI === "function") refreshCatalogUI();
     }
     auth.onAuthStateChanged(applyAuthUI);
 
@@ -241,7 +245,7 @@
       catch(e){ console.error(e); alert("Login failed. Check email/password or account access."); }
     });
 
-    /* Probe write permission */
+    // Quick write probe
     (function writeProbe(){
       const month = new Date().toISOString().slice(0,7);
       const ref = db.ref(`logs/__probe/${month}`).push();
@@ -253,11 +257,11 @@
       });
     })();
 
-    /* App data */
+    /* ------- App data ------- */
     const locations = ["Beacon","Prohibition","Tulia Osteria","Ce Soir"];
     let selectedMonth = new Date().toISOString().slice(0,7);
 
-    /* Units + conversions */
+    /* ------- Units + conversions ------- */
     const unitSystems = {
       each:{units:["each"],toBase:{each:1}},
       piece:{units:["piece"],toBase:{piece:1}},
@@ -277,7 +281,7 @@
       return +(pricePerBase * (sys.toBase[unit]||1)).toFixed(4);
     }
 
-    /* Catalog (Firestore) */
+    /* ------- Catalog (Firestore) ------- */
     const catalog = new Map();  // id -> data
     let catalogUnsub=null;
     function subscribeCatalog(){
@@ -291,7 +295,7 @@
 
     function refreshCatalogUI(){
       // fill product options for each item row
-      document.querySelectorAll('.item').forEach(row=>{
+      document.querySelectorAll('#items-container .item').forEach(row=>{
         const sel = row.querySelector('select[name="product"]');
         if (sel) populateProductSelect(sel,row);
       });
@@ -351,16 +355,25 @@
       }catch(e){ console.error(e); alert("Save failed."); }
     };
 
-    /* Populate selects */
-    function fillSelect(sel, values){ sel.innerHTML=""; values.forEach(v=>{ const o=document.createElement("option"); o.value=o.textContent=v; sel.appendChild(o); }); }
+    /* ------- UI helpers ------- */
+    function fillSelect(sel, values){
+      sel.innerHTML="";
+      values.forEach(v=>{ const o=document.createElement("option"); o.value=o.textContent=v; sel.appendChild(o); });
+    }
+
     function populateProductSelect(selectEl,rowEl){
       const prev = selectEl.value; selectEl.innerHTML="";
       const items=[]; catalog.forEach((v,id)=>{ if(v.active) items.push({id,...v}); });
       items.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
-      if(items.length===0){ const o=document.createElement("option"); o.value=""; o.textContent="No products (add in catalog)"; selectEl.appendChild(o); }
-      else { items.forEach(p=>{ const o=document.createElement("option"); o.value=p.id; o.textContent=p.name; selectEl.appendChild(o); }); if(prev && items.some(i=>i.id===prev)) selectEl.value=prev; }
+      if(items.length===0){
+        const o=document.createElement("option"); o.value=""; o.textContent="No products (add in catalog)"; selectEl.appendChild(o);
+      }else{
+        items.forEach(p=>{ const o=document.createElement("option"); o.value=p.id; o.textContent=p.name; selectEl.appendChild(o); });
+        if(prev && items.some(i=>i.id===prev)) selectEl.value=prev;
+      }
       applyProductToRow(rowEl);
     }
+
     function applyProductToRow(rowEl){
       const prodSel=rowEl.querySelector('select[name="product"]');
       const unitSel=rowEl.querySelector('select[name="unit"]');
@@ -399,7 +412,7 @@
       populateProductSelect(prodSel,row);
     }
 
-    /* Logs — avoid duplicate sections on refresh by serializing renders */
+    /* ------- Logs (serialized to avoid doubles) ------- */
     let loadLogsRunId=0;
     function requestLoadLogs(){ loadLogs(++loadLogsRunId); }
     async function loadLogs(runId){
@@ -428,11 +441,16 @@
       logsEl.innerHTML=""; logsEl.appendChild(frag);
     }
 
+    /* ------- Submit transfer ------- */
     async function addTransfer(){
       const date=$("date").value; const from="Pro-Bakery"; const to=$("to").value;
       if(!date||!to) return alert("Select a date and destination.");
       selectedMonth=date.slice(0,7);
-      const groups=document.querySelectorAll('.item');
+
+      // Only read rows from the entry form
+      const groups=document.querySelectorAll('#items-container .item');
+      if(!groups.length) return alert("Add at least one item.");
+
       try{
         for(const g of groups){
           const prodId=g.querySelector('[name="product"]').value;
@@ -451,7 +469,7 @@
       $("items-container").innerHTML=""; $("date").valueAsDate=new Date(); $("to").selectedIndex=0; addItem(); requestLoadLogs();
     }
 
-    /* Invoice (unchanged math/formatting) */
+    /* ------- Invoice ------- */
     async function buildRangeInvoice(){
       const loc=$("inv-loc").value, s=$("inv-start").value, e=$("inv-end").value;
       if(!loc) return alert("Choose a location."); if(!s||!e) return alert("Choose start and end dates.");
@@ -471,6 +489,7 @@
         }
       }catch(err){ console.error("Range invoice read failed", err); return alert("Could not read transfers to build invoice."); }
       if(!rows.length) return alert("No transfers found.");
+
       rows.sort((a,b)=> a.date.localeCompare(b.date));
       const incomingTotal=rows.filter(r=>r.direction==="In").reduce((s,r)=>s+r.lineValue,0);
       const outgoingTotal=rows.filter(r=>r.direction==="Out").reduce((s,r)=>s+r.lineValue,0);
@@ -514,9 +533,9 @@
       put("Outgoing Total", `-$${Math.abs(outgoingTotal).toFixed(2)}`); y+=rowH;
       put("Net Total", (netTotal>=0?"":"-")+`$${Math.abs(netTotal).toFixed(2)}`);
 
-      const filename=`Invoice_${loc}_${s}_${e}.pdf`;
-      $("invoice-iframe").src=doc.output("bloburi"); $("invoice-modal").style.display="block";
-      window.__lastPDF=doc; window.__lastPDFName=filename;
+      $("invoice-iframe").src=doc.output("bloburi");
+      $("invoice-modal").style.display="block";
+      window.__lastPDF=doc; window.__lastPDFName=`Invoice_${loc}_${s}_${e}.pdf`;
     }
     $("invoice-cancel").onclick=()=>{ $("invoice-modal").style.display="none"; $("invoice-iframe").src="about:blank"; window.__lastPDF=null; window.__lastPDFName=null; };
     $("invoice-download").onclick=()=>{ if(window.__lastPDF){ const blob=window.__lastPDF.output("blob"); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=window.__lastPDFName||"invoice.pdf"; a.click(); URL.revokeObjectURL(url);} };
@@ -530,7 +549,7 @@
     }
     window.changeMonth=changeMonth;
 
-    /* Reports */
+    /* ------- Reports ------- */
     function exportExcel(){
       db.ref("logs").once("value").then(snapshot=>{
         const wb=XLSX.utils.book_new();
@@ -573,7 +592,7 @@
     }
     window.exportDateRange=exportDateRange;
 
-    /* Bootstrap */
+    /* ------- Bootstrap ------- */
     (function setupUI(){
       $("date").valueAsDate=new Date();
       fillSelect($("to"),locations); fillSelect($("inv-loc"),locations);
@@ -587,7 +606,7 @@
       subscribeCatalog();
     })();
 
-    /* Idle logout */
+    /* ------- Idle logout ------- */
     let idleTimeout;
     function resetIdle(){ clearTimeout(idleTimeout);
       idleTimeout=setTimeout(async()=>{ if(auth.currentUser){ await auth.signOut(); alert("You have been logged out due to 10 minutes of inactivity."); }}, 10*60*1000);
@@ -598,5 +617,6 @@
   </script>
 </body>
 </html>
+
 
 
