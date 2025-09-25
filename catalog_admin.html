@@ -22,12 +22,12 @@
     .btn.danger:hover{background:var(--red);color:#fff}
     input,select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
     .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25);padding:14px}
-    .muted{color:var(--muted)}
-    .row{display:flex;flex-wrap:wrap;gap:10px}
-    .col{flex:1;min-width:220px}
     table{width:100%;border-collapse:separate;border-spacing:0;margin-top:8px}
     th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
     th{color:var(--gold);font-weight:700}
+    .muted{color:var(--muted)}
+    .pill{display:inline-block;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:.8rem}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
   </style>
 </head>
 <body>
@@ -41,48 +41,44 @@
       </div>
     </div>
 
-    <!-- Quick Add / Edit form -->
-    <div class="panel" style="margin-bottom:14px;">
-      <h2 style="margin:0 0 10px;color:var(--gold);font-size:1.1rem">Add / Edit Product</h2>
-      <div class="row">
-        <div class="col"><label>Name<input id="f-name" placeholder="e.g., Chocolate Cake"></label></div>
-        <div class="col">
-          <label>Base Unit
-            <select id="f-base"></select>
-          </label>
-        </div>
-        <div class="col"><label>Price per Base Unit<input id="f-price" type="number" step="0.01" placeholder="e.g., 25.00"></label></div>
+    <!-- Add / Edit -->
+    <div class="panel">
+      <h2 style="margin:0 0 8px;color:var(--gold);font-size:1.1rem">Add / Edit Product</h2>
+      <div class="grid-3">
+        <label>Name
+          <input id="name" placeholder="e.g., Chocolate Cake">
+        </label>
+        <label>Base Unit
+          <select id="baseUnit">
+            <option value="each">each</option><option value="piece">piece</option>
+            <option value="kg">kg</option><option value="g">g</option><option value="lb">lb</option>
+            <option value="L">L</option><option value="ml">ml</option><option value="fl oz">fl oz</option>
+          </select>
+        </label>
+        <label>Price per Base Unit
+          <input id="price" type="number" step="0.01" placeholder="e.g., 25.00">
+        </label>
       </div>
-      <div class="row" style="margin-top:8px">
-        <div class="col">
-          <label>Use Conversions?
-            <select id="f-useconv">
-              <option value="false">No</option>
-              <option value="true">Yes</option>
-            </select>
-          </label>
-        </div>
-        <div class="col">
-          <label>Active?
-            <select id="f-active">
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </select>
-          </label>
-        </div>
-        <div class="col" style="display:flex;align-items:flex-end;gap:10px">
-          <button id="f-save" class="btn primary" type="button">Save / Update</button>
-          <button id="f-clear" class="btn" type="button">Clear</button>
+      <div class="grid-3" style="margin-top:8px;">
+        <label>Use Conversions?
+          <select id="useconv"><option value="false">No</option><option value="true">Yes</option></select>
+        </label>
+        <label>Active?
+          <select id="active"><option value="true">Active</option><option value="false">Inactive</option></select>
+        </label>
+        <div style="display:flex;align-items:flex-end;gap:10px">
+          <button id="save" class="btn primary" type="button">Save / Update</button>
+          <button id="clear" class="btn" type="button">Clear</button>
         </div>
       </div>
-      <div class="muted" style="margin-top:8px">You must be logged in to add/update/delete items.</div>
+      <div class="muted" style="margin-top:8px">You must be logged in with an admin account to add/update/delete items.</div>
     </div>
 
-    <!-- Toolbar + Table -->
-    <div class="panel">
+    <!-- List / CSV -->
+    <div class="panel" style="margin-top:14px;">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <input id="search" placeholder="Search products..." style="flex:1">
-        <button id="clear" class="btn">Clear</button>
+        <button id="clear-search" class="btn">Clear</button>
         <button id="export" class="btn">Export CSV</button>
         <button id="blank-csv" class="btn">Download Blank CSV</button>
         <button id="import" class="btn">Import CSV</button>
@@ -91,7 +87,7 @@
 
       <div style="margin-top:16px;">
         <h2 style="margin:0 0 8px;color:var(--gold);font-size:1.1rem">Catalog</h2>
-        <table id="cat-table">
+        <table>
           <thead>
             <tr>
               <th>Name</th>
@@ -102,7 +98,7 @@
               <th>Actions</th>
             </tr>
           </thead>
-          <tbody id="cat-tbody">
+          <tbody id="tbody">
             <tr><td colspan="6" class="muted">No products found.</td></tr>
           </tbody>
         </table>
@@ -110,27 +106,21 @@
     </div>
   </div>
 
-  <!-- Libraries -->
+  <!-- Libs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 
   <script>
-    // --- Admins ---
     const ADMIN_UIDS = new Set([
-      "In9nS195FPamjwoTM8aHDjJRq8r2", // Jason
-      "csKdZoNF3ufwPVNS1tUmeRFzCnF2"  // Be
+      "In9nS195FPamjwoTM8aHDjJRq8r2",
+      "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
     ]);
 
-    // --- Units (same list as tracker) ---
-    const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
+    function $(id){ return document.getElementById(id); }
 
-    // --- Helpers ---
-    const $ = id => document.getElementById(id);
-    const fillUnits = sel => { sel.innerHTML=""; ALLOWED_UNITS.forEach(u=>{ const o=document.createElement("option"); o.value=o.textContent=u; sel.appendChild(o); }); };
-
-    // --- Firebase ---
+    /* Firebase init (Firestore only) */
     const firebaseConfig = {
       apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
       authDomain: "food-tracker-fd312.firebaseapp.com",
@@ -140,69 +130,61 @@
     const fs   = firebase.firestore();
     const auth = firebase.auth();
 
-    // Solid connection badge: read from catalog (respects rules & auth)
+    /* Better Firestore ping */
     async function ping(){
       try{
         await fs.collection("catalog").limit(1).get();
         $("fb-status").innerHTML = 'Firebase: <strong class="ok" style="color:var(--green)">connected</strong>';
       }catch(e){
-        $("fb-status").innerHTML = 'Firebase: <strong class="err" style="color:#f87171">offline</strong>';
+        if(e.code === "permission-denied"){
+          $("fb-status").innerHTML =
+            'Firebase: <strong class="ok" style="color:var(--green)">connected</strong> <span class="status">(login required)</span>';
+        }else{
+          console.error("Firestore ping error", e);
+          $("fb-status").innerHTML = 'Firebase: <strong class="err" style="color:#f87171">offline</strong>';
+        }
       }
     }
+    ping();
 
-    // Admin check centralized (also logs UID to console for quick sanity)
-    function isAdmin(){
-      const u = auth.currentUser;
-      console.log("[catalog] current UID:", u?.uid || "(none)");
-      return !!u && ADMIN_UIDS.has(u.uid);
-    }
-    function requireAdmin(){
-      if(!isAdmin()){ alert("Admin login required."); return false; }
-      return true;
-    }
-
-    // Auth UI + re-ping when auth changes
+    /* Auth UI */
     function applyAuthUI(u){
       $("login-btn").textContent = u ? "Logout" : "Login";
-      ping(); // ping again because rules may depend on auth
+      render(); // re-render so actions reflect admin
     }
     auth.onAuthStateChanged(applyAuthUI);
-
     $("login-btn").onclick = async ()=>{
-      if(auth.currentUser){ await auth.signOut(); return; }
-      const email=prompt("Admin email:"); if(!email) return;
-      const pw=prompt("Password:"); if(pw==null) return;
+      if (auth.currentUser){ await auth.signOut(); return; }
+      const email = prompt("Admin email:"); if(!email) return;
+      const pw    = prompt("Password:");   if(pw==null) return;
       try{ await auth.signInWithEmailAndPassword(email.trim(), pw); }
-      catch(e){ alert(`${e.code||'auth/error'}: ${e.message||e}`); }
+      catch(e){ console.error(e); alert("Login failed."); }
     };
 
-    // Live catalog
+    /* State */
+    const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
     const CATALOG = new Map(); // id -> data
-    let unsub = null;
-    function startSub(){
-      if (unsub) return;
-      unsub = fs.collection("catalog").onSnapshot(s=>{
-        CATALOG.clear();
-        s.forEach(d=> CATALOG.set(d.id, d.data()));
-        render();
-      }, err => {
-        console.error("catalog snapshot error:", err);
-        $("fb-status").innerHTML = 'Firebase: <strong class="err" style="color:#f87171">offline</strong>';
-      });
-    }
+    let editId = null;
 
-    // Render table
+    /* Live subscribe + render */
+    fs.collection("catalog").onSnapshot(s=>{
+      CATALOG.clear();
+      s.forEach(d=> CATALOG.set(d.id, d.data()));
+      render();
+    });
+
     function render(){
       const q = $("search").value.trim().toLowerCase();
-      const tbody = $("cat-tbody"); tbody.innerHTML = "";
+      const tbody = $("tbody"); tbody.innerHTML = "";
       const rows = [];
       CATALOG.forEach((v,id)=> rows.push({id,...v}));
       rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
-      const filtered = rows.filter(r=> !q || (r.name||"").toLowerCase().includes(q));
 
+      const filtered = rows.filter(r=> !q || (r.name||"").toLowerCase().includes(q));
       if(!filtered.length){
         const tr=document.createElement("tr"); tr.innerHTML=`<td colspan="6" class="muted">No products found.</td>`; tbody.appendChild(tr); return;
       }
+
       filtered.forEach(p=>{
         const tr=document.createElement("tr");
         tr.innerHTML=`
@@ -218,66 +200,66 @@
         tbody.appendChild(tr);
       });
 
-      // actions
+      // wire actions
       tbody.querySelectorAll("[data-edit]").forEach(btn=>{
         btn.onclick = ()=>{
-          const id = btn.getAttribute("data-edit");
-          const cur = CATALOG.get(id); if(!cur) return;
-          $("f-name").value = cur.name||"";
-          $("f-base").value = cur.baseUnit||"each";
-          $("f-price").value = cur.pricePerBase??"";
-          $("f-useconv").value = String(!!cur.useConversions);
-          $("f-active").value  = String(!!cur.active);
-          $("f-save").dataset.id = id; // mark edit mode
+          const id=btn.getAttribute("data-edit"); const cur=CATALOG.get(id); if(!cur) return;
+          editId = id;
+          $("name").value = cur.name||"";
+          $("baseUnit").value = cur.baseUnit||"each";
+          $("price").value = cur.pricePerBase ?? "";
+          $("useconv").value = String(!!cur.useConversions);
+          $("active").value = String(!!cur.active);
           window.scrollTo({top:0,behavior:"smooth"});
         };
       });
       tbody.querySelectorAll("[data-del]").forEach(btn=>{
         btn.onclick = async ()=>{
-          if(!requireAdmin()) return;
+          if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
           if(!confirm("Delete this product?")) return;
           try{ await fs.collection("catalog").doc(btn.getAttribute("data-del")).delete(); }
-          catch(e){ console.error(e); alert("Delete failed."); }
+          catch(e){
+            console.error(e);
+            alert(e.code === "permission-denied" ? "Permission denied by Firestore rules." : "Delete failed.");
+          }
         };
       });
     }
 
-    // Form handlers
-    $("f-clear").onclick = ()=>{
-      $("f-name").value=""; $("f-base").value="each"; $("f-price").value="";
-      $("f-useconv").value="false"; $("f-active").value="true"; delete $("f-save").dataset.id;
+    $("clear-search").onclick = ()=>{ $("search").value=""; render(); };
+
+    /* Form buttons */
+    $("clear").onclick = ()=>{
+      editId = null;
+      $("name").value=""; $("baseUnit").value="each"; $("price").value="";
+      $("useconv").value="false"; $("active").value="true";
     };
 
-    $("f-save").onclick = async ()=>{
-      if(!requireAdmin()) return;
+    $("save").onclick = async ()=>{
+      if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
+      const name=$("name").value.trim();
+      const baseUnit=$("baseUnit").value;
+      const pricePerBase=parseFloat($("price").value);
+      const useConversions=$("useconv").value==="true";
+      const active=$("active").value==="true";
+      if(!name || !ALLOWED_UNITS.includes(baseUnit) || isNaN(pricePerBase)) return alert("Fill name, base unit, and price.");
 
-      const name = $("f-name").value.trim();
-      const baseUnit = $("f-base").value;
-      const pricePerBase = parseFloat($("f-price").value);
-      const useConversions = $("f-useconv").value === "true";
-      const active = $("f-active").value === "true";
-      if(!name || !ALLOWED_UNITS.includes(baseUnit) || !isFinite(pricePerBase)) return alert("Please complete Name, Base Unit, and Price.");
-
-      const payload = { name, baseUnit, pricePerBase, useConversions, active };
-      const idExisting = $("f-save").dataset.id;
-
+      const payload={name,baseUnit,pricePerBase,useConversions,active};
       try{
-        if(idExisting){
-          await fs.collection("catalog").doc(idExisting).set(payload, {merge:false});
+        if(editId){
+          await fs.collection("catalog").doc(editId).set(payload,{merge:false});
         }else{
           const id = name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
-          await fs.collection("catalog").doc(id||undefined).set(payload);
+          await fs.collection("catalog").doc(id||undefined).set(payload,{merge:false});
         }
-        $("f-clear").click();
+        $("clear").click();
       }catch(e){
-        console.error(e); alert("Save failed: " + (e?.code || e?.message || e));
+        console.error(e);
+        alert(e.code === "permission-denied" ? "Permission denied by Firestore rules." : "Save failed.");
       }
     };
 
-    // Search / toolbar
-    $("search").oninput = render;
-    $("clear").onclick = ()=>{ $("search").value=""; render(); };
-
+    /* CSV */
     $("export").onclick = ()=>{
       const rows=[["id","name","baseUnit","pricePerBase","useConversions","active"]];
       CATALOG.forEach((v,id)=> rows.push([id, v.name||"", v.baseUnit||"", v.pricePerBase||0, !!v.useConversions, !!v.active]));
@@ -296,7 +278,7 @@
     $("import").onclick = ()=> $("csv-file").click();
     $("csv-file").addEventListener("change", async ev=>{
       const file=ev.target.files[0]; if(!file) return;
-      if(!requireAdmin()) { ev.target.value=""; return; }
+      if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) { alert("Admin login required."); ev.target.value=""; return; }
       Papa.parse(file,{header:true,skipEmptyLines:true,complete: async (res)=>{
         const rows=res.data||[]; if(!rows.length) return alert("No rows found.");
         let upserts=0, skipped=0;
@@ -306,12 +288,9 @@
             const baseUnit=(r.baseUnit||"each").trim();
             const pricePerBase=parseFloat(r.pricePerBase);
             const idRaw=(r.id||"").trim();
-            const useConversions = String(r.useConversions).toLowerCase()==="true";
-            const active = r.active===undefined ? true : String(r.active).toLowerCase()==="true";
-
             if(!name || !ALLOWED_UNITS.includes(baseUnit) || !isFinite(pricePerBase)){ skipped++; continue; }
             const id = idRaw ? idRaw : name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
-            const payload={ name, baseUnit, pricePerBase, useConversions, active };
+            const payload={ name, baseUnit, pricePerBase, useConversions: false, active: true };
             await fs.collection("catalog").doc(id).set(payload, { merge:false });
             upserts++;
           }catch(e){ console.error(e); skipped++; }
@@ -320,14 +299,10 @@
         ev.target.value="";
       }});
     });
-
-    // Boot
-    fillUnits($("f-base"));
-    ping();
-    startSub();
   </script>
 </body>
 </html>
+
 
 
 
