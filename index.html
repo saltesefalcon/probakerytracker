@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Pro-Bakery Transfer Tracker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <style>
     /* Black + Gold theme */
@@ -19,25 +19,26 @@
     h1 .brand{color:var(--gold)}
     .sub{color:var(--muted);font-size:.95rem}
     .status{color:var(--muted);font-size:.92rem}
-    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25);overflow:visible}
-    .section{padding:14px 14px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25)}
+    .section{padding:14px}
     .section h2{margin:4px 0 10px;font-size:1.1rem;color:var(--gold)}
     .row{display:flex;gap:10px;flex-wrap:wrap}
     label{font-weight:600;font-size:.95rem;color:var(--muted)}
     input, select{width:100%;padding:10px 12px;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:1rem}
     input[readonly]{opacity:.85}
-    button{padding:10px 12px;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:1rem;width:auto;display:inline-block;cursor:pointer}
-    .btn{border:1px solid var(--gold);background:transparent;color:var(--gold);transition:.2s}
+    .btn{cursor:pointer;border:1px solid var(--gold);background:transparent;color:var(--gold);transition:.2s;border-radius:12px;padding:10px 12px}
     .btn:hover{background:var(--gold);color:var(--bg)}
     .btn.primary{background:var(--gold);color:var(--bg);border:1px solid var(--gold)}
     .btn.primary:hover{background:var(--gold-2);border-color:var(--gold-2)}
-    .btn.full{width:100%}
+    .btn.danger{border-color:var(--red);color:var(--red)}
+    .btn.danger:hover{background:var(--red);color:#fff}
+    .btn.block{display:block;width:100%}
     .muted{color:var(--muted);font-size:.9rem}
-    .ok{color:var(--green)} .err{color:#f87171}
-    .spacer{height:12px}
+    .ok{color:var(--green)}
+    .err{color:#f87171}
     .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
     .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-    .item{background:var(--card);border:1px solid var(--line);padding:12px;border-radius:12px;margin-bottom:10px}
+    .item{background:var(--card);border:1px solid var(--line);padding:12px;border-radius:12px;margin-bottom:12px}
     .total-value{font-size:.95rem;color:#e6e6e6;margin-top:6px}
     .log-entry{background:var(--card);border:1px solid var(--line);padding:10px;border-radius:12px;margin:8px 0}
     .log-entry.completed{opacity:.6}
@@ -46,6 +47,14 @@
     .tag{padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:.8rem;color:var(--muted)}
     .tag.gold{border-color:var(--gold);color:var(--gold)}
     hr.sep{border:none;border-top:1px solid var(--line);margin:12px 0}
+    #items-container{margin:10px 0} /* ensure rows push buttons down */
+
+    /* Invoice modal */
+    #invoice-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.82);z-index:1000}
+    #invoice-content{position:absolute;top:5%;left:5%;width:90%;height:90%;background:#fff;border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+    #invoice-iframe{flex:1;border:none}
+    #invoice-buttons{padding:10px;text-align:right;background:#f0f0f0}
+    #invoice-buttons button{margin-left:8px}
 
     @media (max-width:700px){ .grid-3,.grid-2{grid-template-columns:1fr} }
   </style>
@@ -55,7 +64,7 @@
     <div class="header">
       <div>
         <h1><span class="brand">Pro-Bakery</span> Transfer Tracker</h1>
-        <div class="sub">Log transfers from <strong>Pro-Bakery</strong> to your locations, with products/units/prices from the catalog.</div>
+        <div class="sub">Log transfers from <strong>Pro-Bakery</strong> to your locations, with product/units/prices driven by the catalog.</div>
       </div>
       <div>
         <a class="btn" href="catalog_admin.html" style="margin-right:8px">Catalog Admin</a>
@@ -68,28 +77,36 @@
     <div class="panel section">
       <h2>New Transfer</h2>
       <div class="grid-3">
-        <label>Date <input type="date" id="date"></label>
-        <label>From <input type="text" id="from-fixed" value="Pro-Bakery" readonly></label>
-        <label>To <select id="to"></select></label>
+        <label>Date
+          <input type="date" id="date">
+        </label>
+        <label>From
+          <input type="text" value="Pro-Bakery" readonly>
+        </label>
+        <label>To
+          <select id="to"></select>
+        </label>
       </div>
 
-      <div id="items-container" class="spacer"></div>
-      <button id="add-item-btn" type="button" class="btn full">Add Item</button>
-      <button id="submit-btn" type="button" class="btn primary full">Submit Transfer</button>
-      <div class="spacer"></div>
-      <div class="muted">Totals and cost are auto-filled from the product catalog.</div>
+      <div id="items-container"></div>
+      <button id="add-item-btn" type="button" class="btn block">Add Item</button>
+      <button id="submit-btn" type="button" class="btn primary block" style="margin-top:8px;">Submit Transfer</button>
+
+      <div class="muted" style="margin-top:8px">Totals and cost are auto-filled from the product catalog. Admins can edit the catalog below.</div>
     </div>
 
     <!-- Logs -->
     <div class="panel section" style="margin-top:14px;">
-      <h2>Logs by Location <span class="tag gold" style="margin-left:6px" id="current-month"></span></h2>
+      <h2>
+        Logs by Location
+        <span class="tag gold" style="margin-left:6px" id="current-month"></span>
+      </h2>
       <div class="muted">Navigate months to review activity.</div>
-      <div class="spacer"></div>
-      <div>
-        <button class="btn inline" type="button" onclick="changeMonth(-1)">&lt; Prev</button>
-        <button class="btn inline" type="button" onclick="changeMonth(1)">Next &gt;</button>
+      <div style="margin:8px 0;">
+        <button class="btn" type="button" onclick="changeMonth(-1)">&lt; Prev</button>
+        <button class="btn" type="button" onclick="changeMonth(1)" style="margin-left:8px;">Next &gt;</button>
       </div>
-      <div id="logs" style="margin-top:12px;"></div>
+      <div id="logs"></div>
     </div>
 
     <!-- Reports -->
@@ -120,14 +137,47 @@
         <label class="inline" style="flex:1">Start <input type="date" id="inv-start"></label>
         <label class="inline" style="flex:1">End <input type="date" id="inv-end"></label>
       </div>
-      <button class="btn primary inline" type="button" id="build-range-invoice" style="margin-top:8px;">Create Invoice (By Location & Date Range)</button>
+      <button class="btn primary" type="button" id="build-range-invoice" style="margin-top:8px;">Create Invoice (By Location & Date Range)</button>
+    </div>
+
+    <!-- Admin catalog editor (inline quick editor is kept minimal on tracker page) -->
+    <div class="panel section admin-only" style="margin-top:14px;">
+      <h2>Product Sales Catalog</h2>
+      <div class="muted">Edit full details in <a href="catalog_admin.html">Catalog Admin</a>. This mini editor lets you add/update single items.</div>
+      <div class="grid-3" style="margin-top:8px;">
+        <label>Name <input id="cat-name" placeholder="e.g., Chocolate Cake"></label>
+        <label>Base Unit
+          <select id="cat-baseunit">
+            <option value="each">each</option><option value="piece">piece</option>
+            <option value="kg">kg</option><option value="g">g</option><option value="lb">lb</option>
+            <option value="L">L</option><option value="ml">ml</option><option value="fl oz">fl oz</option>
+          </select>
+        </label>
+        <label>Price per Base Unit <input id="cat-price" type="number" step="0.01" placeholder="e.g., 25.00"></label>
+      </div>
+      <div class="grid-3" style="margin-top:8px;">
+        <label>Use Conversions?
+          <select id="cat-useconv"><option value="false">No</option><option value="true">Yes</option></select>
+        </label>
+        <label>Active?
+          <select id="cat-active"><option value="true">Active</option><option value="false">Inactive</option></select>
+        </label>
+        <div style="display:flex;align-items:flex-end;gap:10px">
+          <button id="cat-save" class="btn primary" type="button">Save / Update</button>
+          <button id="cat-clear" class="btn" type="button">Clear</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+      <div class="muted" style="margin-bottom:6px;">Catalog Items</div>
+      <div id="catalog-list"></div>
     </div>
 
     <!-- Invoice Modal -->
-    <div id="invoice-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.82);z-index:1000">
-      <div style="position:absolute;top:5%;left:5%;width:90%;height:90%;background:#fff;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
-        <iframe id="invoice-iframe" style="flex:1;border:none"></iframe>
-        <div style="padding:10px;text-align:right;background:#f0f0f0">
+    <div id="invoice-modal">
+      <div id="invoice-content">
+        <iframe id="invoice-iframe"></iframe>
+        <div id="invoice-buttons">
           <button id="invoice-cancel">Close</button>
           <button id="invoice-download">Download PDF</button>
           <button id="invoice-print">Print</button>
@@ -136,7 +186,7 @@
     </div>
   </div>
 
-  <!-- External libraries -->
+  <!-- Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
@@ -145,9 +195,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
-    const $ = (id)=>document.getElementById(id);
+    const ADMIN_UIDS = new Set([
+      "In9nS195FPamjwoTM8aHDjJRq8r2",
+      "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
+    ]);
+    function $(id){ return document.getElementById(id); }
 
-    /* --- Firebase init --- */
+    /* Firebase */
     const firebaseConfig = {
       apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
       authDomain: "food-tracker-fd312.firebaseapp.com",
@@ -158,122 +212,170 @@
       appId: "1:1012475913662:web:81837595030d4b8a8105ef"
     };
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const fs = firebase.firestore();
-    const auth = firebase.auth();
+    const db  = firebase.database();
+    const fs  = firebase.firestore();
+    const auth= firebase.auth();
 
-    /* --- Admin allow-list + auth UI --- */
-    const ADMIN_UIDS = new Set([
-      "In9nS195FPamjwoTM8aHDjJRq8r2",
-      "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
-    ]);
+    (function watchFirebaseConnection(){
+      const status = $("fb-status");
+      db.ref(".info/connected").on("value", snap => {
+        status.innerHTML = snap.val() ? 'Firebase: <strong class="ok">connected</strong>'
+                                      : 'Firebase: <strong class="err">offline</strong>';
+      });
+    })();
+
     function applyAuthUI(user){
-      const signedIn = !!user;
-      const isAdmin  = !!user && ADMIN_UIDS.has(user.uid);
+      const isAdmin = !!user && ADMIN_UIDS.has(user.uid);
       document.body.classList.toggle("admin", isAdmin);
-      $("login-btn").textContent = signedIn ? "Logout" : "Login";
-      requestLoadLogs();
+      $("login-btn").textContent = user ? "Logout" : "Login";
+      requestLoadLogs();            // refresh after auth change
+      refreshCatalogUI();           // keep admin UI in sync
     }
     auth.onAuthStateChanged(applyAuthUI);
+
     $("login-btn").addEventListener("click", async ()=>{
-      const user = auth.currentUser;
-      if (user) { await auth.signOut(); return; }
-      const email = prompt("Admin email:"); if(!email) return;
-      const pw    = prompt("Password:");   if(pw==null) return;
+      if (auth.currentUser){ await auth.signOut(); return; }
+      const email = prompt("Admin email:"); if (!email) return;
+      const pw    = prompt("Password:");   if (pw == null) return;
       try { await auth.signInWithEmailAndPassword(email.trim(), pw); }
       catch(e){ console.error(e); alert("Login failed. Check email/password or account access."); }
     });
 
-    /* --- Connectivity indicator --- */
-    (function watchFirebaseConnection(){
-      const status = $("fb-status");
-      const connRef = db.ref(".info/connected");
-      connRef.on("value", snap => {
-        status.innerHTML = snap.val() === true
-          ? 'Firebase: <strong class="ok">connected</strong>'
-          : 'Firebase: <strong class="err">offline</strong>';
-      });
-    })();
-
-    /* --- Probe write permission (helpful error if rules block writes) --- */
+    /* Probe write permission */
     (function writeProbe(){
-      const store="__probe", month=new Date().toISOString().slice(0,7);
-      const keyRef=db.ref(`logs/${store}/${month}`).push();
-      const probe={date:"1970-01-01",from:"__probe",to:"__probe",product:"probe",unit:"unit",amount:0};
-      keyRef.set(probe).then(()=>keyRef.remove()).catch(e=>{
-        console.error("Probe write blocked:", e);
+      const month = new Date().toISOString().slice(0,7);
+      const ref = db.ref(`logs/__probe/${month}`).push();
+      const row = { date:"1970-01-01", from:"__probe", to:"__probe", product:"probe", unit:"unit", amount:0 };
+      ref.set(row).then(()=>ref.remove()).catch(e=>{
+        console.error("Write probe failed:", e);
         $("fb-status").innerHTML = 'Firebase: <strong class="err">connected (no write)</strong>';
-        alert("Database write blocked. Check Realtime Database rules for /logs/*");
+        alert("Database write blocked: " + (e?.code || e?.message || e));
       });
     })();
 
-    /* --- Static data --- */
+    /* App data */
     const locations = ["Beacon","Prohibition","Tulia Osteria","Ce Soir"];
     let selectedMonth = new Date().toISOString().slice(0,7);
 
-    /* --- Units & conversions --- */
+    /* Units + conversions */
     const unitSystems = {
       each:{units:["each"],toBase:{each:1}},
       piece:{units:["piece"],toBase:{piece:1}},
-      L:{units:["L","ml","fl oz"],toBase:{"L":1,"ml":1/1000,"fl oz":1/33.814}},
-      ml:{units:["ml","L","fl oz"],toBase:{"ml":1,"L":1000,"fl oz":1000/33.814}},
-      kg:{units:["kg","g","lb"],toBase:{"kg":1,"g":1/1000,"lb":1/2.20462}},
-      g:{units:["g","kg","lb"],toBase:{"g":1,"kg":1000,"lb":1000/2.20462}},
-      lb:{units:["lb","kg","g"],toBase:{"lb":1,"kg":2.20462,"g":2.20462*1000}},
-      "fl oz":{units:["fl oz","L","ml"],toBase:{"fl oz":1,"L":33.814,"ml":33.814*1000}}
+      L:{units:["L","ml","fl oz"],toBase:{L:1,ml:1/1000,"fl oz":1/33.814}},
+      ml:{units:["ml","L","fl oz"],toBase:{ml:1,L:1000,"fl oz":1000/33.814}},
+      kg:{units:["kg","g","lb"],toBase:{kg:1,g:1/1000,lb:1/2.20462}},
+      g:{units:["g","kg","lb"],toBase:{g:1,kg:1000,lb:1000/2.20462}},
+      lb:{units:["lb","kg","g"],toBase:{lb:1,kg:2.20462,g:2.20462*1000}},
+      "fl oz":{units:["fl oz","L","ml"],toBase:{"fl oz":1,L:33.814,ml:33.814*1000}}
     };
-    const allowedUnits = (base, useConv)=> (unitSystems[base] ? (useConv?unitSystems[base].units:[base]) : [base]);
-    const priceForUnit = (pricePerBase, base, unit)=>{
-      const sys = unitSystems[base]; if(!sys) return pricePerBase;
+    function allowedUnits(baseUnit,useConversions){
+      const sys = unitSystems[baseUnit] || {units:[baseUnit],toBase:{[baseUnit]:1}};
+      return useConversions ? sys.units : [baseUnit];
+    }
+    function priceForUnit(pricePerBase, baseUnit, unit){
+      const sys = unitSystems[baseUnit]; if(!sys) return pricePerBase;
       return +(pricePerBase * (sys.toBase[unit]||1)).toFixed(4);
-    };
-
-    /* --- Catalog cache (Firestore) --- */
-    const catalog = new Map();
-    fs.collection("catalog").onSnapshot(snap=>{
-      catalog.clear(); snap.forEach(doc=>catalog.set(doc.id, doc.data()));
-      document.querySelectorAll('.item').forEach(row=>{
-        const sel = row.querySelector('select[name="product"]');
-        if (sel) populateProductSelect(sel, row);
-      });
-    });
-
-    /* --- UI helpers --- */
-    function fillSelect(sel, options){
-      sel.innerHTML=""; options.forEach(v=>{ const o=document.createElement("option"); o.value=o.textContent=v; sel.appendChild(o); });
     }
 
-    function populateProductSelect(selectEl, rowEl){
+    /* Catalog (Firestore) */
+    const catalog = new Map();  // id -> data
+    let catalogUnsub=null;
+    function subscribeCatalog(){
+      if(catalogUnsub) return;
+      catalogUnsub = fs.collection("catalog").onSnapshot(snap=>{
+        catalog.clear();
+        snap.forEach(d=> catalog.set(d.id, d.data()));
+        refreshCatalogUI();
+      });
+    }
+
+    function refreshCatalogUI(){
+      // fill product options for each item row
+      document.querySelectorAll('.item').forEach(row=>{
+        const sel = row.querySelector('select[name="product"]');
+        if (sel) populateProductSelect(sel,row);
+      });
+      // admin list
+      const list = $("catalog-list"); if(!list) return;
+      list.innerHTML = "";
+      const rows=[];
+      catalog.forEach((v,id)=> rows.push({id,...v}));
+      rows.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
+      rows.forEach(p=>{
+        const div = document.createElement("div");
+        div.className="item";
+        div.innerHTML = `
+          <div class="grid-3">
+            <div><strong>${p.name}</strong><div class="muted">${p.active?"Active":"Inactive"}</div></div>
+            <div>Base Unit: <strong>${p.baseUnit}</strong><br><span class="muted">Conversions: ${p.useConversions?"Yes":"No"}</span></div>
+            <div>Price/Base: <strong>$${Number(p.pricePerBase).toFixed(2)}</strong></div>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <button class="btn" data-edit="${p.id}">Edit</button>
+            <button class="btn danger" data-del="${p.id}">Delete</button>
+          </div>`;
+        list.appendChild(div);
+      });
+      list.querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=>{
+        const id=b.getAttribute('data-edit'); const p=catalog.get(id); if(!p) return;
+        $('cat-name').value=p.name||""; $('cat-baseunit').value=p.baseUnit||"each";
+        $('cat-price').value=p.pricePerBase??""; $('cat-useconv').value=String(!!p.useConversions);
+        $('cat-active').value=String(!!p.active); $('cat-save').dataset.id=id;
+        window.scrollTo({top:b.getBoundingClientRect().top + window.scrollY - 200, behavior:"smooth"});
+      });
+      list.querySelectorAll('[data-del]').forEach(b=> b.onclick=async()=>{
+        if(!confirm("Delete this product?")) return;
+        try{ await fs.collection('catalog').doc(b.getAttribute('data-del')).delete(); }
+        catch(e){ console.error(e); alert("Delete failed."); }
+      });
+    }
+
+    $("cat-clear").onclick = ()=>{ $('cat-name').value=""; $('cat-baseunit').value="each"; $('cat-price').value="";
+      $('cat-useconv').value="false"; $('cat-active').value="true"; delete $('cat-save').dataset.id; };
+
+    $("cat-save").onclick = async ()=>{
+      if (!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
+      const name=$('cat-name').value.trim(); const baseUnit=$('cat-baseunit').value;
+      const pricePerBase=parseFloat($('cat-price').value);
+      const useConversions=$('cat-useconv').value==="true"; const active=$('cat-active').value==="true";
+      if(!name || isNaN(pricePerBase)) return alert("Please fill Name and Price.");
+      const payload={name,baseUnit,pricePerBase,useConversions,active};
+      const idExisting=$('cat-save').dataset.id;
+      try{
+        if(idExisting){ await fs.collection('catalog').doc(idExisting).set(payload,{merge:false}); }
+        else{
+          const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+          await fs.collection('catalog').doc(id||undefined).set(payload);
+        }
+        $("cat-clear").click();
+      }catch(e){ console.error(e); alert("Save failed."); }
+    };
+
+    /* Populate selects */
+    function fillSelect(sel, values){ sel.innerHTML=""; values.forEach(v=>{ const o=document.createElement("option"); o.value=o.textContent=v; sel.appendChild(o); }); }
+    function populateProductSelect(selectEl,rowEl){
       const prev = selectEl.value; selectEl.innerHTML="";
       const items=[]; catalog.forEach((v,id)=>{ if(v.active) items.push({id,...v}); });
       items.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
-      if (!items.length){
-        const o=document.createElement("option"); o.value=""; o.textContent="No products (add in catalog)"; selectEl.appendChild(o);
-      } else {
-        items.forEach(p=>{ const o=document.createElement("option"); o.value=p.id; o.textContent=p.name; selectEl.appendChild(o); });
-        if (prev && items.some(i=>i.id===prev)) selectEl.value=prev;
-      }
+      if(items.length===0){ const o=document.createElement("option"); o.value=""; o.textContent="No products (add in catalog)"; selectEl.appendChild(o); }
+      else { items.forEach(p=>{ const o=document.createElement("option"); o.value=p.id; o.textContent=p.name; selectEl.appendChild(o); }); if(prev && items.some(i=>i.id===prev)) selectEl.value=prev; }
       applyProductToRow(rowEl);
     }
-
     function applyProductToRow(rowEl){
       const prodSel=rowEl.querySelector('select[name="product"]');
       const unitSel=rowEl.querySelector('select[name="unit"]');
       const cpuInput=rowEl.querySelector('input[name="cost"]');
       const qtyInput=rowEl.querySelector('input[name="amount"]');
       const totalDiv=rowEl.querySelector('.total-value');
-
-      const prod=catalog.get(prodSel.value); unitSel.innerHTML="";
-      if (!prod){ cpuInput.value=""; totalDiv.textContent=""; return; }
-
-      const units=allowedUnits(prod.baseUnit, !!prod.useConversions);
-      units.forEach(u=>{ const o=document.createElement("option"); o.value=o.textContent=u; unitSel.appendChild(o); });
-
-      const recalc=()=>{
-        const cpu=priceForUnit(Number(prod.pricePerBase||0), prod.baseUnit, unitSel.value);
-        cpuInput.value=Number(cpu).toFixed(2);
-        const qty=parseFloat(qtyInput.value);
-        totalDiv.textContent = (!isNaN(qty)) ? `Line Total: $${(qty*cpu).toFixed(2)}` : "";
+      const prod=catalog.get(prodSel.value);
+      unitSel.innerHTML="";
+      if(!prod){ cpuInput.value=""; totalDiv.textContent=""; return; }
+      allowedUnits(prod.baseUnit, !!prod.useConversions).forEach(u=>{ const o=document.createElement("option"); o.value=o.textContent=u; unitSel.appendChild(o); });
+      const recalc = ()=>{
+        const cpu = priceForUnit(Number(prod.pricePerBase||0), prod.baseUnit, unitSel.value);
+        cpuInput.value = Number(cpu).toFixed(2);
+        const qty = parseFloat(qtyInput.value);
+        totalDiv.textContent = !isNaN(qty) ? `Line Total: $${(qty*cpu).toFixed(2)}` : "";
       };
       unitSel.onchange=recalc; qtyInput.oninput=recalc; recalc();
     }
@@ -294,32 +396,27 @@
       $("items-container").appendChild(row);
       const prodSel=row.querySelector('select[name="product"]');
       prodSel.onchange=()=>applyProductToRow(row);
-      populateProductSelect(prodSel, row);
+      populateProductSelect(prodSel,row);
     }
 
-    /* --- Logs (race-condition safe so they don't duplicate on refresh) --- */
-    let loadLogsRunId = 0;
+    /* Logs — avoid duplicate sections on refresh by serializing renders */
+    let loadLogsRunId=0;
     function requestLoadLogs(){ loadLogs(++loadLogsRunId); }
     async function loadLogs(runId){
-      const logsEl=$("logs"); const myId=runId ?? ++loadLogsRunId;
-      const frag=document.createDocumentFragment(); $("current-month").textContent=selectedMonth;
-
-      for (const loc of locations){
-        const sec=document.createElement("div");
-        sec.className="item";
-        sec.innerHTML=`<h3 style="margin:0 0 8px">${loc}</h3>`;
+      const myId=runId??++loadLogsRunId; const logsEl=$("logs"); const frag=document.createDocumentFragment();
+      $("current-month").textContent=selectedMonth;
+      for(const store of locations){
+        const sec=document.createElement("div"); sec.className="item"; sec.innerHTML=`<h3 style="margin:0 0 8px">${store}</h3>`;
         try{
-          const snap=await db.ref(`logs/${loc}/${selectedMonth}`).once("value");
-          if (myId!==loadLogsRunId) return; // a newer render started
+          const snap=await db.ref(`logs/${store}/${selectedMonth}`).once("value");
+          if(myId!==loadLogsRunId) return;
           const data=snap.val();
-          if (data){
+          if(data){
             Object.entries(data).forEach(([k,l])=>{
-              const div=document.createElement("div");
-              div.className=l.completed?"log-entry completed":"log-entry";
-              const color=l.amount<0?"#ef4444":"#22c55e";
-              const display=l.amount<0?l.amount:`+${l.amount}`;
-              div.innerHTML=`<span style="color:${color}">${display} ${l.unit} of ${l.product} (${l.date})</span>`;
-              sec.appendChild(div);
+              const d=document.createElement("div"); d.className=l.completed?"log-entry completed":"log-entry";
+              const color=l.amount<0?"#ef4444":"#22c55e"; const display=l.amount<0?l.amount:`+${l.amount}`;
+              d.innerHTML=`<span style="color:${color}">${display} ${l.unit} of ${l.product} (${l.date})</span>`;
+              sec.appendChild(d);
             });
           }else{
             const none=document.createElement("div"); none.className="muted"; none.textContent="No entries."; sec.appendChild(none);
@@ -327,37 +424,34 @@
         }catch(e){ console.error("Failed to load logs", e); }
         frag.appendChild(sec);
       }
-      if (myId!==loadLogsRunId) return;
+      if(myId!==loadLogsRunId) return;
       logsEl.innerHTML=""; logsEl.appendChild(frag);
     }
 
     async function addTransfer(){
-      const date=$("date").value, from="Pro-Bakery", to=$("to").value;
-      if(!date || !to) return alert("Select a date and destination.");
-      selectedMonth = date.slice(0,7);
-      const rows=document.querySelectorAll('.item');
+      const date=$("date").value; const from="Pro-Bakery"; const to=$("to").value;
+      if(!date||!to) return alert("Select a date and destination.");
+      selectedMonth=date.slice(0,7);
+      const groups=document.querySelectorAll('.item');
       try{
-        for (const g of rows){
+        for(const g of groups){
           const prodId=g.querySelector('[name="product"]').value;
-          const prod=catalog.get(prodId);
-          const productName=prod?.name||"";
+          const prod=catalog.get(prodId); const productName=prod?.name||"";
           const amt=parseFloat(g.querySelector('[name="amount"]').value);
           const unit=g.querySelector('[name="unit"]').value;
           const cpu=parseFloat(g.querySelector('[name="cost"]').value);
           if(!productName || isNaN(amt)) return alert("Complete all item fields.");
-
           const key=db.ref('logs').push().key;
           const out={date,from,to,product:productName,unit,costPerUnit:cpu,comment:"",amount:-amt};
           const inn={date,from,to,product:productName,unit,costPerUnit:cpu,comment:"",amount: amt};
           const upd={}; upd[`logs/${from}/${selectedMonth}/${key}`]=out; upd[`logs/${to}/${selectedMonth}/${key}`]=inn;
           await db.ref().update(upd);
         }
-      }catch(e){ console.error("Submit failed:",e); alert("Submit failed: "+(e?.code||e?.message||e)); return; }
-
+      }catch(e){ console.error("Submit failed:", e); return alert("Submit failed: "+(e?.code||e?.message||e)); }
       $("items-container").innerHTML=""; $("date").valueAsDate=new Date(); $("to").selectedIndex=0; addItem(); requestLoadLogs();
     }
 
-    /* --- Invoice --- */
+    /* Invoice (unchanged math/formatting) */
     async function buildRangeInvoice(){
       const loc=$("inv-loc").value, s=$("inv-start").value, e=$("inv-end").value;
       if(!loc) return alert("Choose a location."); if(!s||!e) return alert("Choose start and end dates.");
@@ -366,88 +460,89 @@
       try{
         const snap=await db.ref(`logs/${loc}`).once("value");
         if(snap.exists()){
-          snap.forEach(monthSnap=>{
-            monthSnap.forEach(logSnap=>{
-              const l=logSnap.val(); if(!l) return;
-              const d=new Date(l.date); if(d<start||d>end) return;
+          snap.forEach(m=> m.forEach(ls=>{
+            const l=ls.val(); if(!l) return; const d=new Date(l.date);
+            if(d>=start && d<=end){
               const cpu=Number.isFinite(l.costPerUnit)?Number(l.costPerUnit):0;
-              const amt=Number(l.amount)||0;
-              rows.push({date:l.date,direction:amt<0?"Out":"In",counterparty:amt<0?l.to:l.from,product:l.product,qty:Math.abs(amt),unit:l.unit,cpu,lineValue:+(amt*cpu).toFixed(2)});
-            });
-          });
+              const amt=Number(l.amount)||0; const counterparty=amt<0?l.to:l.from;
+              rows.push({date:l.date,direction:amt<0?"Out":"In",counterparty,product:l.product,qty:Math.abs(amt),unit:l.unit,cpu,lineValue:+(amt*cpu).toFixed(2)});
+            }
+          }));
         }
-      }catch(err){ console.error("Range invoice read failed",err); return alert("Could not read transfers to build invoice."); }
+      }catch(err){ console.error("Range invoice read failed", err); return alert("Could not read transfers to build invoice."); }
       if(!rows.length) return alert("No transfers found.");
-      rows.sort((a,b)=>a.date.localeCompare(b.date));
+      rows.sort((a,b)=> a.date.localeCompare(b.date));
       const incomingTotal=rows.filter(r=>r.direction==="In").reduce((s,r)=>s+r.lineValue,0);
       const outgoingTotal=rows.filter(r=>r.direction==="Out").reduce((s,r)=>s+r.lineValue,0);
       const netTotal=+(incomingTotal+outgoingTotal).toFixed(2);
 
       const { jsPDF }=window.jspdf; const W_IN=10,H_IN=8;
       const doc=new jsPDF({orientation:"landscape",unit:"pt",format:[W_IN*72,H_IN*72]});
-      const M=24, pageH=H_IN*72;
+      const M=24,pageH=H_IN*72;
+      doc.setFont("helvetica","bold");doc.setFontSize(16);doc.text(`Invoice (All Transfers for ${loc})`,M,M+6);
+      doc.setFont("helvetica","normal");doc.setFontSize(10);
+      [`Location: ${loc}`,`Range: ${s} to ${e}`,`Generated: ${new Date().toISOString().slice(0,19).replace('T',' ')}`]
+        .forEach((t,i)=>doc.text(t,M,M+28+i*14));
 
-      doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.text(`Invoice (All Transfers for ${loc})`, M, M+6);
-      doc.setFont("helvetica","normal"); doc.setFontSize(10);
-      [`Location: ${loc}`,`Range: ${s} to ${e}`,`Generated: ${new Date().toISOString().slice(0,19).replace('T',' ')}`].forEach((t,i)=>doc.text(t,M,M+28+i*14));
-
-      const cols=[{label:"Date",w:86,align:"left"},{label:"Dir",w:38,align:"left"},{label:"Counterparty",w:186,align:"left"},
-                  {label:"Product",w:136,align:"left"},{label:"Qty/Unit",w:70,align:"right"},{label:"Unit $",w:66,align:"right"},
-                  {label:"Total $",w:84,align:"right"}];
+      const cols=[
+        {label:"Date",w:86,align:"left"}, {label:"Dir",w:38,align:"left"},
+        {label:"Counterparty",w:186,align:"left"}, {label:"Product",w:136,align:"left"},
+        {label:"Qty/Unit",w:70,align:"right"}, {label:"Unit $",w:66,align:"right"},
+        {label:"Total $",w:84,align:"right"}
+      ];
       let x=M,y=M+86; const colX=cols.map(c=>{const cx=x;x+=c.w;return cx;});
-      doc.setFont("courier","bold"); doc.setFontSize(9.5);
-      cols.forEach((c,i)=>{const hx=c.align==="right"?colX[i]+c.w:colX[i]; doc.text(c.label,hx,y,c.align==="right"?{align:"right"}:undefined);});
-      doc.setFont("courier","normal"); doc.setFontSize(9.5); const rowH=14; y+=rowH;
-      const clip=(s,w)=>{const m=Math.floor(w/5.8),t=String(s??"");return t.length>m?t.slice(0,m-1)+"…":t;};
+      doc.setFont("courier","bold");doc.setFontSize(9.5);
+      cols.forEach((c,i)=>{const hx=c.align==="right"?colX[i]+c.w:colX[i];doc.text(c.label,hx,y,c.align==="right"?{align:"right"}:undefined);});
+      doc.setFont("courier","normal");doc.setFontSize(9.5); const rowH=14; y+=rowH;
+      const clip=(s,w)=>{const t=String(s??"");const max=Math.floor(w/5.8);return t.length>max?t.slice(0,max-1)+"…":t;};
 
       rows.forEach(r=>{
-        if(y>pageH-M*4){
-          doc.addPage({orientation:"landscape",unit:"pt",format:[W_IN*72,H_IN*72]}); y=M;
-          doc.setFont("courier","bold"); doc.setFontSize(9.5);
-          cols.forEach((c,i)=>{const hx=c.align==="right"?colX[i]+c.w:colX[i]; doc.text(c.label,hx,y,c.align==="right"?{align:"right"}:undefined);});
-          doc.setFont("courier","normal"); doc.setFontSize(9.5); y+=rowH;
-        }
-        const vals=[r.date,r.direction,clip(r.counterparty,cols[2].w),clip(r.product,cols[3].w),`${r.qty}${r.unit?" "+r.unit:""}`,
-                    `$${Number(r.cpu||0).toFixed(2)}`, (r.lineValue>=0?"":"-")+`$${Math.abs(r.lineValue).toFixed(2)}`];
-        vals.forEach((v,i)=>{const c=cols[i],tx=c.align==="right"?colX[i]+c.w:colX[i]; doc.text(String(v),tx,y,c.align==="right"?{align:"right"}:undefined);});
+        if(y>pageH-M*4){doc.addPage({orientation:"landscape",unit:"pt",format:[W_IN*72,H_IN*72]});
+          y=M; doc.setFont("courier","bold");doc.setFontSize(9.5);
+          cols.forEach((c,i)=>{const hx=c.align==="right"?colX[i]+c.w:colX[i];doc.text(c.label,hx,y,c.align==="right"?{align:"right"}:undefined);});
+          doc.setFont("courier","normal");doc.setFontSize(9.5); y+=rowH;}
+        const values=[r.date,r.direction,clip(r.counterparty,cols[2].w),clip(r.product,cols[3].w),
+          `${r.qty}${r.unit?" "+r.unit:""}`,`$${Number(r.cpu||0).toFixed(2)}`,
+          (r.lineValue>=0?"":"-")+`$${Math.abs(r.lineValue).toFixed(2)}`];
+        values.forEach((v,i)=>{const c=cols[i];const tx=c.align==="right"?colX[i]+c.w:colX[i];doc.text(String(v),tx,y,c.align==="right"?{align:"right"}:undefined);});
         y+=rowH;
       });
 
-      y=Math.max(y+rowH, pageH-M-rowH*3); doc.setFont("courier","bold"); doc.setFontSize(10.5);
-      const tableRight=colX[colX.length-1]+cols[cols.length-1].w;
-      const put=(label,val)=>doc.text(`${label}: ${val}`,tableRight,y,{align:"right"});
-      put("Incoming Total",`$${Math.abs(incomingTotal).toFixed(2)}`); y+=rowH;
-      put("Outgoing Total",`-$${Math.abs(outgoingTotal).toFixed(2)}`); y+=rowH;
-      put("Net Total",(netTotal>=0?"":"-")+`$${Math.abs(netTotal).toFixed(2)}`);
+      y=Math.max(y+rowH, pageH-M-rowH*3); doc.setFont("courier","bold");doc.setFontSize(10.5);
+      const put=(label,val)=>doc.text(`${label}: ${val}`, colX[colX.length-1]+cols[cols.length-1].w, y, {align:"right"});
+      put("Incoming Total", `$${Math.abs(incomingTotal).toFixed(2)}`); y+=rowH;
+      put("Outgoing Total", `-$${Math.abs(outgoingTotal).toFixed(2)}`); y+=rowH;
+      put("Net Total", (netTotal>=0?"":"-")+`$${Math.abs(netTotal).toFixed(2)}`);
 
       const filename=`Invoice_${loc}_${s}_${e}.pdf`;
-      const blobUri=doc.output("bloburi"); $("invoice-iframe").src=blobUri; $("invoice-modal").style.display="block";
+      $("invoice-iframe").src=doc.output("bloburi"); $("invoice-modal").style.display="block";
       window.__lastPDF=doc; window.__lastPDFName=filename;
     }
     $("invoice-cancel").onclick=()=>{ $("invoice-modal").style.display="none"; $("invoice-iframe").src="about:blank"; window.__lastPDF=null; window.__lastPDFName=null; };
     $("invoice-download").onclick=()=>{ if(window.__lastPDF){ const blob=window.__lastPDF.output("blob"); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=window.__lastPDFName||"invoice.pdf"; a.click(); URL.revokeObjectURL(url);} };
-    $("invoice-print").onclick=()=>{ const iframe=$("invoice-iframe"); iframe.contentWindow?.focus(); iframe.contentWindow?.print(); };
+    $("invoice-print").onclick=()=>{ $("invoice-iframe").contentWindow?.focus(); $("invoice-iframe").contentWindow?.print(); };
 
-    /* --- Month nav --- */
     function changeMonth(offset){
       const [y,m]=selectedMonth.split("-").map(Number);
       const d=new Date(y, m-1+offset);
       selectedMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-      requestLoadLogs(); $("current-month").textContent=selectedMonth;
+      requestLoadLogs();
     }
     window.changeMonth=changeMonth;
 
-    /* --- Reports --- */
+    /* Reports */
     function exportExcel(){
       db.ref("logs").once("value").then(snapshot=>{
         const wb=XLSX.utils.book_new();
-        snapshot.forEach(storeSnap=>{
-          const rows=[]; storeSnap.forEach(monthSnap=>{ monthSnap.forEach(logSnap=>{
-            const l=logSnap.val(); const tot=Number.isFinite(l.costPerUnit)?(l.amount*l.costPerUnit).toFixed(2):"";
+        snapshot.forEach(store=>{
+          const rows=[];
+          store.forEach(month=> month.forEach(log=>{
+            const l=log.val();
+            const tot=Number.isFinite(l.costPerUnit)?(l.amount*l.costPerUnit).toFixed(2):"";
             rows.push([l.date,l.from,l.to,l.product,l.amount,l.unit,l.costPerUnit??"",tot,l.comment||""]);
-          });});
+          }));
           const ws=XLSX.utils.aoa_to_sheet([["Date","From","To","Product","Amount","Unit","Cost","Total","Comment"],...rows]);
-          XLSX.utils.book_append_sheet(wb,ws,storeSnap.key.slice(0,31));
+          XLSX.utils.book_append_sheet(wb,ws,store.key.slice(0,31));
         });
         XLSX.writeFile(wb,`Transfers_${selectedMonth}.xlsx`);
       }).catch(e=>{ console.error("Export failed",e); alert("Export failed (check connection)."); });
@@ -459,50 +554,49 @@
       if(isNaN(startD)||isNaN(endD)) return alert("Please select both start and end dates.");
       db.ref("logs").once("value").then(snapshot=>{
         const wb=XLSX.utils.book_new();
-        snapshot.forEach(storeSnap=>{
-          const rows=[]; storeSnap.forEach(monthSnap=>{ monthSnap.forEach(logSnap=>{
-            const l=logSnap.val(), d=new Date(l.date);
-            if(d>=startD&&d<=endD){
+        snapshot.forEach(store=>{
+          const rows=[];
+          store.forEach(month=> month.forEach(log=>{
+            const l=log.val(), d=new Date(l.date);
+            if(d>=startD && d<=endD){
               const tot=Number.isFinite(l.costPerUnit)?(l.amount*l.costPerUnit).toFixed(2):"";
               rows.push([l.date,l.from,l.to,l.product,l.amount,l.unit,l.costPerUnit??"",tot,l.comment||""]);
             }
-          });});
-          if(rows.length){ const ws=XLSX.utils.aoa_to_sheet([["Date","From","To","Product","Amount","Unit","Cost","Total","Comment"],...rows]); XLSX.utils.book_append_sheet(wb,ws,storeSnap.key.slice(0,31)); }
+          }));
+          if(rows.length){
+            const ws=XLSX.utils.aoa_to_sheet([["Date","From","To","Product","Amount","Unit","Cost","Total","Comment"],...rows]);
+            XLSX.utils.book_append_sheet(wb,ws,store.key.slice(0,31));
+          }
         });
         XLSX.writeFile(wb,`Report_${$("report-start").value}_${$("report-end").value}.xlsx`);
       }).catch(e=>{ console.error("Export by date failed",e); alert("Export by date failed (check connection)."); });
     }
     window.exportDateRange=exportDateRange;
 
-    /* --- Bootstrap --- */
-    function setupUI(){
+    /* Bootstrap */
+    (function setupUI(){
       $("date").valueAsDate=new Date();
-      fillSelect($("to"), locations); fillSelect($("inv-loc"), locations);
+      fillSelect($("to"),locations); fillSelect($("inv-loc"),locations);
       const today=new Date().toISOString().slice(0,10);
       $("report-start").value=today; $("report-end").value=today; $("inv-start").value=today; $("inv-end").value=today;
       $("add-item-btn").addEventListener("click", addItem);
       $("submit-btn").addEventListener("click", addTransfer);
       $("build-range-invoice").addEventListener("click", buildRangeInvoice);
-      addItem(); $("current-month").textContent=selectedMonth; requestLoadLogs();
-    }
-    setupUI();
+      addItem();
+      requestLoadLogs();
+      subscribeCatalog();
+    })();
 
-    /* --- Idle logout --- */
+    /* Idle logout */
     let idleTimeout;
-    function resetIdleTimer(){
-      clearTimeout(idleTimeout);
-      idleTimeout=setTimeout(async ()=>{
-        if(auth.currentUser){
-          await auth.signOut(); // applyAuthUI will update UI
-          alert("You have been logged out due to 10 minutes of inactivity.");
-        }
-      }, 10*60*1000);
+    function resetIdle(){ clearTimeout(idleTimeout);
+      idleTimeout=setTimeout(async()=>{ if(auth.currentUser){ await auth.signOut(); alert("You have been logged out due to 10 minutes of inactivity."); }}, 10*60*1000);
     }
-    ["mousemove","keydown","mousedown","touchstart","scroll"].forEach(evt=>document.addEventListener(evt, resetIdleTimer, false));
-    resetIdleTimer();
-
-    window.addEventListener("beforeunload", async ()=>{ if(auth.currentUser){ await auth.signOut(); } });
+    ["mousemove","keydown","mousedown","touchstart","scroll"].forEach(evt=>document.addEventListener(evt, resetIdle,false));
+    resetIdle();
+    window.addEventListener("beforeunload", async()=>{ if(auth.currentUser){ await auth.signOut(); }});
   </script>
 </body>
 </html>
+
 
