@@ -16,9 +16,11 @@
     h1 .brand{color:var(--gold)}
     .sub{color:var(--muted);font-size:.95rem}
     .status{color:var(--muted);font-size:.92rem}
-    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25);padding:14px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25);padding:14px;overflow:visible}
     label{font-weight:600;font-size:.95rem;color:var(--muted)}
-    input,select,button{width:100%;padding:10px 12px;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:1rem}
+    input,select,button{padding:10px 12px;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:1rem}
+    input,select{width:100%}
+    button{width:auto;display:inline-block}
     input[readonly]{opacity:.85}
     .btn{cursor:pointer;border:1px solid var(--gold);background:transparent;color:var(--gold);transition:.2s}
     .btn:hover{background:var(--gold);color:var(--bg)}
@@ -32,13 +34,14 @@
     .muted{color:var(--muted);font-size:.9rem}
     .spacer{height:12px}
     .table{width:100%;border-collapse:separate;border-spacing:0 8px}
-    .tr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 160px;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+    .tr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 120px;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
     .th{font-weight:700;color:var(--gold)}
-    .search{display:flex;gap:10px}
     .small{font-size:.85rem}
     .right{display:flex;gap:8px;justify-content:flex-end}
-    @media(max-width:900px){ .tr{grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 140px} }
-    @media(max-width:700px){ .grid-3,.grid-2{grid-template-columns:1fr} .tr{grid-template-columns:1.4fr 1fr 1fr 1fr 1fr 120px} }
+    .admin-only{display:none}
+    body.admin .admin-only{display:block}
+    @media(max-width:900px){ .tr{grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 110px} }
+    @media(max-width:700px){ .grid-3,.grid-2{grid-template-columns:1fr} .tr{grid-template-columns:1.4fr 1fr 1fr 1fr 1fr 100px} }
   </style>
 </head>
 <body>
@@ -48,7 +51,7 @@
         <h1><span class="brand">Pro-Bakery</span> — Catalog Admin</h1>
         <div class="sub">Manage the product catalog that powers the Transfer Tracker.</div>
       </div>
-      <div class="right">
+      <div style="display:flex;gap:8px;align-items:center">
         <a class="btn" href="index.html" title="Back to tracker">Back to Tracker</a>
         <span id="fb-status" class="status">Firebase: <em>checking…</em></span>
         <button id="login-btn" type="button" class="btn primary">Login</button>
@@ -56,14 +59,26 @@
     </div>
 
     <div class="panel" style="margin-bottom:14px">
-      <div class="row search">
-        <input id="search" placeholder="Search products…" />
+      <div class="row" style="gap:10px;align-items:center">
+        <input id="search" placeholder="Search products…" style="flex:1" />
         <button id="clear-search" class="btn">Clear</button>
+        <div class="admin-only" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="csv-export" class="btn">Export CSV</button>
+          <button id="csv-template" class="btn">Download Blank CSV</button>
+          <button id="csv-template-print" class="btn">Print Blank Template</button>
+          <input id="csv-file" type="file" accept=".csv" style="display:none">
+          <button id="csv-import" class="btn primary">Import CSV</button>
+        </div>
+      </div>
+      <div class="small muted admin-only" style="margin-top:6px">
+        CSV columns: <code>id</code> (optional), <code>name</code>, <code>baseUnit</code> (each,piece,kg,g,lb,L,ml,"fl oz"), <code>pricePerBase</code> (number),
+        <code>useConversions</code> (true/false), <code>active</code> (true/false).
+        Existing IDs are overwritten; new rows are added.
       </div>
     </div>
 
     <!-- Add/Edit form -->
-    <div class="panel" style="margin-bottom:14px">
+    <div class="panel admin-only" style="margin-bottom:14px">
       <h2 style="margin:0 0 10px;color:var(--gold)">Add / Edit Product</h2>
       <div class="grid-3">
         <label>Name
@@ -71,14 +86,9 @@
         </label>
         <label>Base Unit
           <select id="cat-baseunit">
-            <option value="each">each</option>
-            <option value="piece">piece</option>
-            <option value="kg">kg</option>
-            <option value="g">g</option>
-            <option value="lb">lb</option>
-            <option value="L">L</option>
-            <option value="ml">ml</option>
-            <option value="fl oz">fl oz</option>
+            <option value="each">each</option><option value="piece">piece</option>
+            <option value="kg">kg</option><option value="g">g</option><option value="lb">lb</option>
+            <option value="L">L</option><option value="ml">ml</option><option value="fl oz">fl oz</option>
           </select>
         </label>
         <label>Price per Base Unit
@@ -87,16 +97,10 @@
       </div>
       <div class="grid-3" style="margin-top:8px">
         <label>Use Conversions?
-          <select id="cat-useconv">
-            <option value="false">No (base unit only)</option>
-            <option value="true">Yes (offer related units)</option>
-          </select>
+          <select id="cat-useconv"><option value="false">No (base unit only)</option><option value="true">Yes (offer related units)</option></select>
         </label>
         <label>Active?
-          <select id="cat-active">
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </select>
+          <select id="cat-active"><option value="true">Active</option><option value="false">Inactive</option></select>
         </label>
         <div style="display:flex;align-items:flex-end;gap:10px">
           <button id="cat-save" class="btn primary" type="button">Save / Update</button>
@@ -117,13 +121,19 @@
     </div>
   </div>
 
-  <!-- Firebase SDKs -->
+  <!-- Firebase SDKs + PapaParse for CSV -->
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
   <script>
-    // ---- Firebase init (same project as your tracker) ----
+    const ADMIN_UIDS = new Set([
+      "In9nS195FPamjwoTM8aHDjJRq8r2",
+      "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
+    ]);
+
+    // ---- Firebase init (same project as tracker) ----
     const firebaseConfig = {
       apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
       authDomain: "food-tracker-fd312.firebaseapp.com",
@@ -153,9 +163,9 @@
       try { await auth.signInWithEmailAndPassword(email.trim(), pw); }
       catch(e){ console.error(e); alert("Login failed."); }
     });
-    auth.onAuthStateChanged(u => setAdmin(!!u));
+    auth.onAuthStateChanged(u => setAdmin(!!u && ADMIN_UIDS.has(u.uid)));
 
-    // ---- Connection hint (just Firestore ping by listing) ----
+    // ---- Connection hint ----
     (async ()=>{
       try {
         await fs.collection("_ping").limit(1).get();
@@ -177,18 +187,13 @@
     function money(n){ const x = Number(n); return isFinite(x) ? `$${x.toFixed(2)}` : ""; }
 
     function render(list){
-      // search filter
       const q = ($("#search").value || "").toLowerCase().trim();
       const filtered = !q ? list : list.filter(p =>
-        (p.name||"").toLowerCase().includes(q) ||
-        (p.baseUnit||"").toLowerCase().includes(q)
+        (p.name||"").toLowerCase().includes(q) || (p.baseUnit||"").toLowerCase().includes(q)
       );
 
       rowsEl.innerHTML = "";
-      if (!filtered.length){
-        emptyEl.style.display = "block";
-        return;
-      }
+      if (!filtered.length){ emptyEl.style.display = "block"; return; }
       emptyEl.style.display = "none";
 
       filtered.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
@@ -201,20 +206,18 @@
           <div>${money(p.pricePerBase)}</div>
           <div>${yesNo(!!p.useConversions)}</div>
           <div>${yesNo(!!p.active)}</div>
-          <div class="right">
-            <button class="btn" data-edit="${p.id}">Edit</button>
-            <button class="btn danger" data-del="${p.id}">Delete</button>
+          <div class="right admin-only">
+            <button class="btn" data-edit="${p.id}" title="Edit">Edit</button>
+            <button class="btn danger" data-del="${p.id}" title="Delete">🗑</button>
           </div>
         `;
         rowsEl.appendChild(row);
       });
 
-      // wire actions
       rowsEl.querySelectorAll("[data-edit]").forEach(btn=>{
         btn.onclick = ()=>{
           const id = btn.getAttribute("data-edit");
-          const p = allDocs.find(x => x.id === id);
-          if(!p) return;
+          const p = allDocs.find(x => x.id === id); if(!p) return;
           $("#cat-name").value = p.name || "";
           $("#cat-baseunit").value = p.baseUnit || "each";
           $("#cat-price").value = p.pricePerBase ?? "";
@@ -222,15 +225,14 @@
           $("#cat-active").value = String(!!p.active);
           $("#cat-save").dataset.id = id;
           const idBox = $("#edit-id");
-          idBox.style.display = "block";
-          idBox.textContent = "Editing ID: " + id;
+          idBox.style.display = "block"; idBox.textContent = "Editing ID: " + id;
           window.scrollTo({ top: 0, behavior: "smooth" });
         };
       });
       rowsEl.querySelectorAll("[data-del]").forEach(btn=>{
         btn.onclick = async ()=>{
+          if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
           const id = btn.getAttribute("data-del");
-          if(!auth.currentUser) return alert("Login required to delete.");
           if(!confirm("Delete this product?")) return;
           try { await fs.collection("catalog").doc(id).delete(); }
           catch(e){ console.error(e); alert("Delete failed."); }
@@ -238,54 +240,141 @@
       });
     }
 
-    // Search box handlers
+    // Search handlers
     $("#search").addEventListener("input", ()=> render(allDocs));
     $("#clear-search").addEventListener("click", ()=>{ $("#search").value=""; render(allDocs); });
 
     // ---- Save / Clear ----
     $("#cat-clear").addEventListener("click", ()=>{
-      $("#cat-name").value="";
-      $("#cat-baseunit").value="each";
-      $("#cat-price").value="";
-      $("#cat-useconv").value="false";
-      $("#cat-active").value="true";
-      delete $("#cat-save").dataset.id;
-      const idBox = $("#edit-id");
-      idBox.style.display="none";
-      idBox.textContent="";
+      $("#cat-name").value=""; $("#cat-baseunit").value="each"; $("#cat-price").value="";
+      $("#cat-useconv").value="false"; $("#cat-active").value="true";
+      delete $("#cat-save").dataset.id; const idBox=$("#edit-id"); idBox.style.display="none"; idBox.textContent="";
     });
 
-    function slug(s){
-      return (s||"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
-    }
+    function slug(s){ return (s||"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,""); }
+    const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
 
     $("#cat-save").addEventListener("click", async ()=>{
-      if(!auth.currentUser) return alert("Login required to save.");
+      if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
       const name = $("#cat-name").value.trim();
       const baseUnit = $("#cat-baseunit").value;
       const pricePerBase = parseFloat($("#cat-price").value);
       const useConversions = $("#cat-useconv").value === "true";
       const active = $("#cat-active").value === "true";
       if(!name || isNaN(pricePerBase)) return alert("Please fill Name and Price.");
-      // Validate allowed base units
-      const allowed = ["each","piece","kg","g","lb","L","ml","fl oz"];
-      if(!allowed.includes(baseUnit)) return alert("Invalid base unit.");
-
+      if(!ALLOWED_UNITS.includes(baseUnit)) return alert("Invalid base unit.");
       const payload = { name, baseUnit, pricePerBase, useConversions, active };
       const existing = $("#cat-save").dataset.id;
-
       try{
-        if(existing){
-          await fs.collection("catalog").doc(existing).set(payload, { merge:true });
-        } else {
-          const id = slug(name) || undefined; // undefined -> auto-id
-          await fs.collection("catalog").doc(id).set(payload);
-        }
+        if(existing){ await fs.collection("catalog").doc(existing).set(payload, { merge:false }); }
+        else{ const id = slug(name) || undefined; await fs.collection("catalog").doc(id).set(payload); }
         $("#cat-clear").click();
-      }catch(e){
-        console.error(e); alert("Save failed.");
+      }catch(e){ console.error(e); alert("Save failed."); }
+    });
+
+    // ---- CSV Tools (admin-only) ----
+    function bool(v, def=false){
+      if (typeof v === "boolean") return v;
+      if (v==null || v==="") return def;
+      const s=String(v).trim().toLowerCase();
+      if (["true","1","yes","y"].includes(s)) return true;
+      if (["false","0","no","n"].includes(s)) return false;
+      return def;
+    }
+    function toCSV(rows){
+      const headers = ["id","name","baseUnit","pricePerBase","useConversions","active"];
+      const out = [headers.join(",")];
+      for(const r of rows){
+        const vals = headers.map(h=>{
+          let v = r[h] ?? "";
+          if (typeof v === "string"){
+            // escape CSV
+            if (v.includes('"') || v.includes(",") || v.includes("\n")) v = '"' + v.replace(/"/g,'""') + '"';
+          }
+          return v;
+        });
+        out.push(vals.join(","));
       }
+      return out.join("\n");
+    }
+    function downloadFile(name, mime, text){
+      const blob = new Blob([text], {type:mime}); const url = URL.createObjectURL(blob);
+      const a=document.createElement("a"); a.href=url; a.download=name; a.click(); URL.revokeObjectURL(url);
+    }
+
+    // Export current catalog
+    $("#csv-export").addEventListener("click", ()=>{
+      const rows = (allDocs||[]).map(p => ({
+        id:p.id, name:p.name||"", baseUnit:p.baseUnit||"", pricePerBase:Number(p.pricePerBase)||0,
+        useConversions: !!p.useConversions, active: !!p.active
+      }));
+      downloadFile("catalog_export.csv", "text/csv;charset=utf-8", toCSV(rows));
+    });
+
+    // Blank template (download)
+    $("#csv-template").addEventListener("click", ()=>{
+      const rows = [{id:"",name:"",baseUnit:"each",pricePerBase:"",useConversions:"false",active:"true"}];
+      downloadFile("catalog_template.csv", "text/csv;charset=utf-8", toCSV(rows));
+    });
+
+    // Blank template (print)
+    $("#csv-template-print").addEventListener("click", ()=>{
+      const w = window.open("", "_blank");
+      w.document.write(`
+        <html><head><title>Catalog Template</title>
+        <style>body{font-family:Arial;padding:16px} table{border-collapse:collapse} th,td{border:1px solid #444;padding:6px 10px}</style>
+        </head><body>
+        <h3>Catalog CSV Template</h3>
+        <p>Columns: <b>id</b> (optional), <b>name</b>, <b>baseUnit</b> (each,piece,kg,g,lb,L,ml,"fl oz"), <b>pricePerBase</b> (number), <b>useConversions</b> (true/false), <b>active</b> (true/false)</p>
+        <table><thead><tr><th>id</th><th>name</th><th>baseUnit</th><th>pricePerBase</th><th>useConversions</th><th>active</th></tr></thead>
+        <tbody><tr><td></td><td></td><td>each</td><td></td><td>false</td><td>true</td></tr></tbody></table>
+        <script>window.onload=()=>window.print()</script>
+        </body></html>`);
+      w.document.close();
+    });
+
+    // Import CSV (overwrite by id/slug, add new)
+    $("#csv-import").addEventListener("click", ()=>{
+      if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
+      $("#csv-file").click();
+    });
+    $("#csv-file").addEventListener("change", async (ev)=>{
+      const file = ev.target.files[0]; if(!file) return;
+      Papa.parse(file, {
+        header:true, skipEmptyLines:true, complete: async (res)=>{
+          const rows = res.data || [];
+          if(!rows.length) return alert("No rows found.");
+          let upserts=0, skipped=0;
+          try{
+            for(const r of rows){
+              const name = (r.name||"").trim();
+              const idRaw = (r.id||"").trim();
+              let baseUnit = (r.baseUnit||"").trim();
+              const pricePerBase = parseFloat(r.pricePerBase);
+              const useConversions = bool(r.useConversions,false);
+              const active = bool(r.active,true);
+
+              if(!name || !isFinite(pricePerBase)){ skipped++; continue; }
+              baseUnit = baseUnit || "each";
+              if(!ALLOWED_UNITS.includes(baseUnit)) { skipped++; continue; }
+
+              const id = (idRaw ? slug(idRaw) : slug(name)) || undefined;
+              const payload = { name, baseUnit, pricePerBase, useConversions, active };
+              if (id){ await fs.collection("catalog").doc(id).set(payload, { merge:false }); }
+              else { await fs.collection("catalog").add(payload); }
+              upserts++;
+            }
+            alert(`Import complete.\nUpserted: ${upserts}\nSkipped: ${skipped}`);
+          }catch(e){
+            console.error(e);
+            alert("Import failed. See console for details.");
+          } finally {
+            ev.target.value = "";
+          }
+        }
+      });
     });
   </script>
 </body>
 </html>
+
