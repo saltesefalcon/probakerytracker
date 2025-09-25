@@ -217,6 +217,34 @@
     const fs  = firebase.firestore();
     const auth= firebase.auth();
 
+      // Surface any page-wide JS error to the status label so you don't get "checking..."
+  window.addEventListener('error', e => {
+    const s = document.getElementById('fb-status');
+    if (s) s.innerHTML = 'Firebase: <strong class="err">' + (e.message || 'script error') + '</strong>';
+  });
+
+  (function watchFirebaseConnection(){
+    const status = document.getElementById("fb-status");
+    try {
+      const db = firebase.database();
+      db.ref(".info/connected").on(
+        "value",
+        snap => {
+          status.innerHTML = snap.val()
+            ? 'Firebase: <strong class="ok">connected</strong>'
+            : 'Firebase: <strong class="err">offline</strong>';
+        },
+        err => {
+          console.error("RTDB connection check failed:", err);
+          status.innerHTML = 'Firebase: <strong class="err">' + (err.code || 'error') + '</strong>';
+        }
+      );
+    } catch (e) {
+      console.error("RTDB not available:", e);
+      status.innerHTML = 'Firebase: <strong class="err">rtdb-missing</strong>';
+    }
+  })();
+
     // Connection status (Realtime DB)
     (function watchFirebaseConnection(){
       const status = $("fb-status");
