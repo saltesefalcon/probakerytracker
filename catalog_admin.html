@@ -112,8 +112,11 @@
       const email=prompt("Admin email:"); if(!email) return;
       const pw=prompt("Password:"); if(pw==null) return;
       try{ await auth.signInWithEmailAndPassword(email.trim(), pw); }
-      catch(e){ console.error(e); alert("Login failed. Check email/password or account access."); }
-    };
+      catch (e) {
+        console.error("Auth error:", e);
+        alert(`Login failed: ${e.code || ''} ${e.message || ''}`);
+      }
+
 
     /* Allowed units (used in templates & validation) */
     const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
