@@ -241,22 +241,32 @@
       }
     })();
 
-    function applyAuthUI(user){
-      const isAdmin = !!user && ADMIN_UIDS.has(user.uid);
-      document.body.classList.toggle("admin", isAdmin);
-      $("login-btn").textContent = user ? "Logout" : "Login";
-      requestLoadLogs();            // refresh after auth change
-      refreshCatalogUI();           // keep admin UI in sync
-    }
-    auth.onAuthStateChanged(applyAuthUI);
+   function applyAuthUI(user){
+  const isAdmin = !!user && ADMIN_UIDS.has(user.uid);
+  document.body.classList.toggle("admin", isAdmin);
+  $("login-btn").textContent = user ? "Logout" : "Login";
+  // keep UI in sync after auth changes
+  if (typeof requestLoadLogs === "function") requestLoadLogs();
+  if (typeof refreshCatalogUI === "function") refreshCatalogUI();
+}
+auth.onAuthStateChanged(applyAuthUI);
 
-    $("login-btn").addEventListener("click", async ()=>{
-      if (auth.currentUser){ await auth.signOut(); return; }
-      const email = prompt("Admin email:"); if (!email) return;
-      const pw    = prompt("Password:");   if (pw == null) return;
-      try { await auth.signInWithEmailAndPassword(email.trim(), pw); }
-      catch(e){ console.error(e); alert("Login failed. Check email/password or account access."); }
-    });
+$("login-btn").addEventListener("click", async ()=>{
+  if (auth.currentUser) {           // Logout path
+    await auth.signOut();
+    return;
+  }
+  // Login path
+  const email = prompt("Admin email:"); if (!email) return;
+  const pw    = prompt("Password:");   if (pw == null) return;
+  try {
+    await auth.signInWithEmailAndPassword(email.trim(), pw);
+  } catch (e) {
+    console.error(e);
+    alert("Login failed. Check email/password or account access.");
+  }
+});
+
 
     // Probe a tiny write so permission issues show up clearly
     (function writeProbe(){
