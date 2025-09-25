@@ -26,7 +26,6 @@
     th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
     th{color:var(--gold);font-weight:700}
     .muted{color:var(--muted)}
-    .pill{display:inline-block;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:.8rem}
   </style>
 </head>
 <body>
@@ -46,7 +45,6 @@
         <button id="clear" class="btn">Clear</button>
         <button id="export" class="btn">Export CSV</button>
         <button id="blank-csv" class="btn">Download Blank CSV</button>
-        <button id="blank-xlsx" class="btn">Download Blank Excel</button>
         <button id="print-blank" class="btn">Print Blank Template</button>
         <button id="import" class="btn">Import CSV</button>
         <input id="csv-file" type="file" accept=".csv" style="display:none">
@@ -73,36 +71,55 @@
     </div>
   </div>
 
-  <!-- Libraries -->
+  <!-- Libraries (order matters) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 
   <script>
-    /* ----- admin allow-list ----- */
     const ADMIN_UIDS = new Set([
       "In9nS195FPamjwoTM8aHDjJRq8r2",
       "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
     ]);
     const $ = (id)=>document.getElementById(id);
 
-    /* ----- Firebase init ----- */
+    /* Firebase init */
     const firebaseConfig = {
       apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
       authDomain: "food-tracker-fd312.firebaseapp.com",
+      databaseURL: "https://food-tracker-fd312-default-rtdb.firebaseio.com",
       projectId: "food-tracker-fd312"
     };
     firebase.initializeApp(firebaseConfig);
+    const db   = firebase.database();
     const fs   = firebase.firestore();
     const auth = firebase.auth();
 
-    /* Connection indicator – Firestore ping */
-    (async function ping(){
-      try{ await fs.collection("__ping").doc("ok").get();
-        $("fb-status").innerHTML='Firebase: <strong class="ok">connected</strong>';
-      }catch{ $("fb-status").innerHTML='Firebase: <strong class="err">offline</strong>'; }
+    // Put script errors / RTDB connection state into the badge
+    window.addEventListener('error', e=>{
+      const s = $("fb-status");
+      if (s) s.innerHTML = 'Firebase: <strong class="err">' + (e.message || 'script error') + '</strong>';
+    });
+    (function watchFirebaseConnection(){
+      const status = $("fb-status");
+      try{
+        db.ref(".info/connected").on("value",
+          snap => {
+            status.innerHTML = snap.val()
+              ? 'Firebase: <strong class="ok">connected</strong>'
+              : 'Firebase: <strong class="err">offline</strong>';
+          },
+          err => {
+            console.error("RTDB connection check failed:", err);
+            status.innerHTML = 'Firebase: <strong class="err">' + (err.code || 'error') + '</strong>';
+          }
+        );
+      }catch(e){
+        console.error("RTDB not available:", e);
+        status.innerHTML = 'Firebase: <strong class="err">rtdb-missing</strong>';
+      }
     })();
 
     function applyAuthUI(u){ $("login-btn").textContent = u ? "Logout" : "Login"; }
@@ -112,13 +129,10 @@
       const email=prompt("Admin email:"); if(!email) return;
       const pw=prompt("Password:"); if(pw==null) return;
       try{ await auth.signInWithEmailAndPassword(email.trim(), pw); }
-      catch (e) {
-        console.error("Auth error:", e);
-        alert(`Login failed: ${e.code || ''} ${e.message || ''}`);
-      }
+      catch(e){ console.error(e); alert("Login failed. Check email/password or account access."); }
+    };
 
-
-    /* Allowed units (used in templates & validation) */
+    /* Units allowed (for help / template) */
     const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
 
     /* Live subscribe and render */
@@ -155,7 +169,7 @@
         tbody.appendChild(tr);
       });
 
-      // wire actions
+      // actions
       tbody.querySelectorAll("[data-del]").forEach(btn=>{
         btn.onclick = async ()=>{
           if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
@@ -193,37 +207,14 @@
 
     /* Download Blank CSV (minimal headers ONLY) */
     $("blank-csv").onclick = ()=>{
-      const rows=[["name","baseUnit","pricePerBase"]]; // no id/useConversions/active
+      // Minimal template: name, baseUnit, pricePerBase (no id / useConversions / active)
+      const rows=[["name","baseUnit","pricePerBase"]];
       const csv=Papa.unparse(rows);
       const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
       const a=document.createElement("a"); a.href=url; a.download="catalog_blank.csv"; a.click(); URL.revokeObjectURL(url);
     };
 
-    /* Download Blank Excel (XLSX) with dropdown for baseUnit */
-    $("blank-xlsx").onclick = ()=>{
-      const wb = XLSX.utils.book_new();
-      // Main sheet with headers
-      const ws = XLSX.utils.aoa_to_sheet([["name","baseUnit","pricePerBase"]]);
-      // Hidden sheet listing allowed units
-      const wsUnits = XLSX.utils.aoa_to_sheet(ALLOWED_UNITS.map(u=>[u]));
-      XLSX.utils.book_append_sheet(wb, ws, "Template");
-      XLSX.utils.book_append_sheet(wb, wsUnits, "_units");
-      wsUnits["!hidden"] = 1;
-
-      // Data validation: dropdown for baseUnit (column B) for rows 2..200
-      const endRow = 200;
-      const range = `B2:B${endRow}`;
-      ws['!dataValidation'] = [{
-        type: 'list',
-        allowBlank: 1,
-        sqref: range,
-        formulas: ['=_units!$A$1:$A$' + ALLOWED_UNITS.length]
-      }];
-
-      XLSX.writeFile(wb, "catalog_blank.xlsx");
-    };
-
-    /* Print Blank Template (simple printable sheet with allowed units shown) */
+    /* Print Blank Template (shows allowed units) */
     $("print-blank").onclick = ()=>{
       const w=window.open("", "_blank");
       w.document.write(`
@@ -234,7 +225,7 @@
           th{background:#eee}
         </style></head><body>
         <h2>Catalog Template</h2>
-        <p>Fill rows and import as CSV. Required columns: <strong>name</strong>, <strong>baseUnit</strong>, <strong>pricePerBase</strong>.</p>
+        <p>Fill rows and import as CSV. Columns required: <strong>name</strong>, <strong>baseUnit</strong>, <strong>pricePerBase</strong>.</p>
         <p>Allowed base units: ${ALLOWED_UNITS.join(", ")}.</p>
         <table>
           <thead><tr><th>name</th><th>baseUnit</th><th>pricePerBase</th></tr></thead>
@@ -247,7 +238,7 @@
       w.document.close();
     };
 
-    /* Import CSV (overwrite by id if present, else slug(name)) */
+    /* Import CSV (overwrite by id if provided; else upsert by slug(name)) */
     $("import").onclick = ()=> $("csv-file").click();
     $("csv-file").addEventListener("change", async ev=>{
       const file=ev.target.files[0]; if(!file) return;
@@ -260,12 +251,11 @@
             const name=(r.name||"").trim();
             const baseUnit=(r.baseUnit||"each").trim();
             const pricePerBase=parseFloat(r.pricePerBase);
-            const idRaw=(r.id||"").trim();        // optional, used only if provided
+            const idRaw=(r.id||"").trim();
             if(!name || !ALLOWED_UNITS.includes(baseUnit) || !isFinite(pricePerBase)){ skipped++; continue; }
             const id = idRaw ? idRaw : name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
-            // Hidden fields default; can be edited later in UI
-            const payload={ name, baseUnit, pricePerBase, useConversions:false, active:true };
-            await fs.collection("catalog").doc(id).set(payload, { merge:false });
+            const payload={ name, baseUnit, pricePerBase, useConversions: false, active: true };
+            await fs.collection("catalog").doc(id).set(payload, { merge:false }); // overwrite if exists; add if new
             upserts++;
           }catch(e){ console.error(e); skipped++; }
         }
@@ -275,13 +265,14 @@
     });
 
     /* Notes:
-       - "Conversions" column shows whether related units (L ↔ ml ↔ fl oz, kg ↔ g ↔ lb) are available on the tracker.
-       - "Active" controls whether an item appears in the tracker’s product list.
-       - "Actions" are the edit/delete controls.
-       - Blank templates intentionally omit id/useConversions/active; export CSV includes them.
+       - "Conversions" shows whether related units (L ⇄ ml ⇄ fl oz, etc.) are enabled.
+       - "Active" controls if the item appears in the Tracker product list.
+       - The Blank CSV template intentionally hides "useConversions" and "active"; they default to
+         false/true on import and can be modified later in Admin.
     */
   </script>
 </body>
 </html>
+
 
 
