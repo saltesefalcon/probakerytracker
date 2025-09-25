@@ -20,12 +20,15 @@
     .btn.primary{background:var(--gold);color:var(--bg);border:1px solid var(--gold)}
     .btn.danger{border-color:var(--red);color:var(--red)}
     .btn.danger:hover{background:var(--red);color:#fff}
-    input{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+    input,select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
     .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25);padding:14px}
+    .muted{color:var(--muted)}
+    .row{display:flex;flex-wrap:wrap;gap:10px}
+    .col{flex:1;min-width:220px}
     table{width:100%;border-collapse:separate;border-spacing:0;margin-top:8px}
     th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
     th{color:var(--gold);font-weight:700}
-    .muted{color:var(--muted)}
+    .pill{display:inline-block;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:.8rem}
   </style>
 </head>
 <body>
@@ -39,13 +42,52 @@
       </div>
     </div>
 
+    <!-- Quick Add / Edit form -->
+    <div class="panel" style="margin-bottom:14px;">
+      <h2 style="margin:0 0 10px;color:var(--gold);font-size:1.1rem">Add / Edit Product</h2>
+      <div class="row">
+        <div class="col"><label>Name<input id="f-name" placeholder="e.g., Chocolate Cake"></label></div>
+        <div class="col">
+          <label>Base Unit
+            <select id="f-base">
+              <!-- filled from ALLOWED_UNITS -->
+            </select>
+          </label>
+        </div>
+        <div class="col"><label>Price per Base Unit<input id="f-price" type="number" step="0.01" placeholder="e.g., 25.00"></label></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="col">
+          <label>Use Conversions?
+            <select id="f-useconv">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </label>
+        </div>
+        <div class="col">
+          <label>Active?
+            <select id="f-active">
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </label>
+        </div>
+        <div class="col" style="display:flex;align-items:flex-end;gap:10px">
+          <button id="f-save" class="btn primary" type="button">Save / Update</button>
+          <button id="f-clear" class="btn" type="button">Clear</button>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:8px">You must be logged in to add/update/delete items.</div>
+    </div>
+
+    <!-- Toolbar + Table -->
     <div class="panel">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <input id="search" placeholder="Search products..." style="flex:1">
         <button id="clear" class="btn">Clear</button>
         <button id="export" class="btn">Export CSV</button>
         <button id="blank-csv" class="btn">Download Blank CSV</button>
-        <button id="print-blank" class="btn">Print Blank Template</button>
         <button id="import" class="btn">Import CSV</button>
         <input id="csv-file" type="file" accept=".csv" style="display:none">
       </div>
@@ -71,10 +113,9 @@
     </div>
   </div>
 
-  <!-- Libraries (order matters) -->
+  <!-- Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
 
@@ -83,82 +124,60 @@
       "In9nS195FPamjwoTM8aHDjJRq8r2",
       "csKdZoNF3ufwPVNS1tUmeRFzCnF2"
     ]);
-    const $ = (id)=>document.getElementById(id);
+    const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
 
-    /* Firebase init */
+    function $(id){ return document.getElementById(id); }
+    function fillUnits(sel){
+      sel.innerHTML = "";
+      ALLOWED_UNITS.forEach(u=>{ const o=document.createElement("option"); o.value=o.textContent=u; sel.appendChild(o); });
+    }
+
+    // Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
       authDomain: "food-tracker-fd312.firebaseapp.com",
-      databaseURL: "https://food-tracker-fd312-default-rtdb.firebaseio.com",
       projectId: "food-tracker-fd312"
     };
     firebase.initializeApp(firebaseConfig);
-    const db   = firebase.database();
     const fs   = firebase.firestore();
     const auth = firebase.auth();
 
-    // Put script errors / RTDB connection state into the badge
-    window.addEventListener('error', e=>{
-      const s = $("fb-status");
-      if (s) s.innerHTML = 'Firebase: <strong class="err">' + (e.message || 'script error') + '</strong>';
-    });
-    (function watchFirebaseConnection(){
-      const status = $("fb-status");
-      try{
-        db.ref(".info/connected").on("value",
-          snap => {
-            status.innerHTML = snap.val()
-              ? 'Firebase: <strong class="ok">connected</strong>'
-              : 'Firebase: <strong class="err">offline</strong>';
-          },
-          err => {
-            console.error("RTDB connection check failed:", err);
-            status.innerHTML = 'Firebase: <strong class="err">' + (err.code || 'error') + '</strong>';
-          }
-        );
+    // Simple ping
+    (async function ping(){
+      try{ await fs.collection("__ping").doc("ok").get();
+        $("fb-status").innerHTML='Firebase: <strong class="ok" style="color:var(--green)">connected</strong>';
       }catch(e){
-        console.error("RTDB not available:", e);
-        status.innerHTML = 'Firebase: <strong class="err">rtdb-missing</strong>';
+        $("fb-status").innerHTML='Firebase: <strong class="err" style="color:#f87171">offline</strong>';
       }
     })();
 
-function applyAuthUI(user){
-  const isAdmin = !!user && ADMIN_UIDS.has(user.uid);
-  document.body.classList.toggle("admin", isAdmin);
-  $("login-btn").textContent = user ? "Logout" : "Login";
-  console.log("Auth state:", user ? user.uid : "signed-out");
-}
+    // Auth UI
+    function applyAuthUI(u){
+      $("login-btn").textContent = u ? "Logout" : "Login";
+    }
+    auth.onAuthStateChanged(applyAuthUI);
+    $("login-btn").onclick = async ()=>{
+      if(auth.currentUser){ await auth.signOut(); return; }
+      const email=prompt("Admin email:"); if(!email) return;
+      const pw=prompt("Password:"); if(pw==null) return;
+      try{ await auth.signInWithEmailAndPassword(email.trim(), pw); }
+      catch(e){ alert(`${e.code||'auth/error'}: ${e.message||e}`); }
+    };
 
-auth.onAuthStateChanged(applyAuthUI);
-
-$("login-btn").onclick = async ()=>{
-  if (auth.currentUser){
-    await auth.signOut();
-    return;
-  }
-  const email = prompt("Admin email:"); if (!email) return;
-  const pw    = prompt("Password:");    if (pw == null) return;
-  try{
-    const cred = await auth.signInWithEmailAndPassword(email.trim(), pw);
-    console.log("Signed in as:", cred.user.uid);
-  }catch(e){
-    console.error("Login failed:", e);
-    alert(`Login failed: ${e.code || e.message}`);
-  }
-};
-
-
-    /* Units allowed (for help / template) */
-    const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
-
-    /* Live subscribe and render */
+    // Data
     const CATALOG = new Map(); // id -> data
-    fs.collection("catalog").onSnapshot(s=>{
-      CATALOG.clear();
-      s.forEach(d=> CATALOG.set(d.id, d.data()));
-      render();
-    });
+    let unsub = null;
 
+    function startSub(){
+      if (unsub) return;
+      unsub = fs.collection("catalog").onSnapshot(s=>{
+        CATALOG.clear();
+        s.forEach(d=> CATALOG.set(d.id, d.data()));
+        render();
+      });
+    }
+
+    // Render table
     function render(){
       const q = $("search").value.trim().toLowerCase();
       const tbody = $("cat-tbody"); tbody.innerHTML = "";
@@ -186,6 +205,19 @@ $("login-btn").onclick = async ()=>{
       });
 
       // actions
+      tbody.querySelectorAll("[data-edit]").forEach(btn=>{
+        btn.onclick = ()=>{
+          const id = btn.getAttribute("data-edit");
+          const cur = CATALOG.get(id); if(!cur) return;
+          $("f-name").value = cur.name||"";
+          $("f-base").value = cur.baseUnit||"each";
+          $("f-price").value = cur.pricePerBase??"";
+          $("f-useconv").value = String(!!cur.useConversions);
+          $("f-active").value  = String(!!cur.active);
+          $("f-save").dataset.id = id; // mark edit mode
+          window.scrollTo({top:0,behavior:"smooth"});
+        };
+      });
       tbody.querySelectorAll("[data-del]").forEach(btn=>{
         btn.onclick = async ()=>{
           if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
@@ -194,26 +226,45 @@ $("login-btn").onclick = async ()=>{
           catch(e){ console.error(e); alert("Delete failed."); }
         };
       });
-      tbody.querySelectorAll("[data-edit]").forEach(btn=>{
-        const id=btn.getAttribute("data-edit");
-        btn.onclick = async ()=>{
-          if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
-          const cur = CATALOG.get(id);
-          const name = prompt("Name:", cur?.name ?? ""); if(name==null) return;
-          const baseUnit = prompt(`Base unit (${ALLOWED_UNITS.join(", ")}):`, cur?.baseUnit ?? "each"); if(baseUnit==null) return;
-          const price = prompt("Price per base unit:", String(cur?.pricePerBase ?? "")); if(price==null) return;
-          const useConv = confirm("Enable related-unit conversions for this product?\nOK = Yes  |  Cancel = No");
-          const active = confirm("Mark item ACTIVE?\nOK = Active  |  Cancel = Inactive");
-          const payload = { name, baseUnit, pricePerBase: parseFloat(price)||0, useConversions: useConv, active };
-          try{ await fs.collection("catalog").doc(id).set(payload, { merge:false }); }
-          catch(e){ console.error(e); alert("Save failed."); }
-        };
-      });
     }
-    $("search").oninput=render; $("clear").onclick=()=>{ $("search").value=""; render(); };
 
-    /* Export CSV (full columns) */
-    $("export").onclick = async ()=>{
+    // Form handlers
+    $("f-clear").onclick = ()=>{
+      $("f-name").value=""; $("f-base").value="each"; $("f-price").value="";
+      $("f-useconv").value="false"; $("f-active").value="true"; delete $("f-save").dataset.id;
+    };
+
+    $("f-save").onclick = async ()=>{
+      if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
+
+      const name = $("f-name").value.trim();
+      const baseUnit = $("f-base").value;
+      const pricePerBase = parseFloat($("f-price").value);
+      const useConversions = $("f-useconv").value === "true";
+      const active = $("f-active").value === "true";
+      if(!name || !ALLOWED_UNITS.includes(baseUnit) || !isFinite(pricePerBase)) return alert("Please complete Name, Base Unit, and Price.");
+
+      const payload = { name, baseUnit, pricePerBase, useConversions, active };
+      const idExisting = $("f-save").dataset.id;
+
+      try{
+        if(idExisting){
+          await fs.collection("catalog").doc(idExisting).set(payload, {merge:false});
+        }else{
+          const id = name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+          await fs.collection("catalog").doc(id||undefined).set(payload);
+        }
+        $("f-clear").click();
+      }catch(e){
+        console.error(e); alert("Save failed.");
+      }
+    };
+
+    // Search / buttons
+    $("search").oninput = render;
+    $("clear").onclick = ()=>{ $("search").value=""; render(); };
+
+    $("export").onclick = ()=>{
       const rows=[["id","name","baseUnit","pricePerBase","useConversions","active"]];
       CATALOG.forEach((v,id)=> rows.push([id, v.name||"", v.baseUnit||"", v.pricePerBase||0, !!v.useConversions, !!v.active]));
       const csv = Papa.unparse(rows);
@@ -221,40 +272,14 @@ $("login-btn").onclick = async ()=>{
       const a=document.createElement("a"); a.href=url; a.download="catalog_export.csv"; a.click(); URL.revokeObjectURL(url);
     };
 
-    /* Download Blank CSV (minimal headers ONLY) */
+    // Minimal template: hide admin flags; just the three required columns
     $("blank-csv").onclick = ()=>{
-      // Minimal template: name, baseUnit, pricePerBase (no id / useConversions / active)
       const rows=[["name","baseUnit","pricePerBase"]];
       const csv=Papa.unparse(rows);
       const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
       const a=document.createElement("a"); a.href=url; a.download="catalog_blank.csv"; a.click(); URL.revokeObjectURL(url);
     };
 
-    /* Print Blank Template (shows allowed units) */
-    $("print-blank").onclick = ()=>{
-      const w=window.open("", "_blank");
-      w.document.write(`
-        <html><head><title>Catalog Template</title>
-        <style>
-          body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:20px}
-          table{border-collapse:collapse;width:100%} th,td{border:1px solid #999;padding:6px}
-          th{background:#eee}
-        </style></head><body>
-        <h2>Catalog Template</h2>
-        <p>Fill rows and import as CSV. Columns required: <strong>name</strong>, <strong>baseUnit</strong>, <strong>pricePerBase</strong>.</p>
-        <p>Allowed base units: ${ALLOWED_UNITS.join(", ")}.</p>
-        <table>
-          <thead><tr><th>name</th><th>baseUnit</th><th>pricePerBase</th></tr></thead>
-          <tbody>
-            ${Array.from({length:15}).map(()=>"<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>").join("")}
-          </tbody>
-        </table>
-        <script>window.print();<\/script>
-        </body></html>`);
-      w.document.close();
-    };
-
-    /* Import CSV (overwrite by id if provided; else upsert by slug(name)) */
     $("import").onclick = ()=> $("csv-file").click();
     $("csv-file").addEventListener("change", async ev=>{
       const file=ev.target.files[0]; if(!file) return;
@@ -268,10 +293,14 @@ $("login-btn").onclick = async ()=>{
             const baseUnit=(r.baseUnit||"each").trim();
             const pricePerBase=parseFloat(r.pricePerBase);
             const idRaw=(r.id||"").trim();
+            // optional columns respected if provided
+            const useConversions = String(r.useConversions).toLowerCase()==="true";
+            const active = r.active===undefined ? true : String(r.active).toLowerCase()==="true";
+
             if(!name || !ALLOWED_UNITS.includes(baseUnit) || !isFinite(pricePerBase)){ skipped++; continue; }
             const id = idRaw ? idRaw : name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
-            const payload={ name, baseUnit, pricePerBase, useConversions: false, active: true };
-            await fs.collection("catalog").doc(id).set(payload, { merge:false }); // overwrite if exists; add if new
+            const payload={ name, baseUnit, pricePerBase, useConversions, active };
+            await fs.collection("catalog").doc(id).set(payload, { merge:false });
             upserts++;
           }catch(e){ console.error(e); skipped++; }
         }
@@ -280,15 +309,13 @@ $("login-btn").onclick = async ()=>{
       }});
     });
 
-    /* Notes:
-       - "Conversions" shows whether related units (L ⇄ ml ⇄ fl oz, etc.) are enabled.
-       - "Active" controls if the item appears in the Tracker product list.
-       - The Blank CSV template intentionally hides "useConversions" and "active"; they default to
-         false/true on import and can be modified later in Admin.
-    */
+    // Boot
+    fillUnits($("f-base"));
+    startSub();
   </script>
 </body>
 </html>
+
 
 
 
