@@ -122,15 +122,31 @@
       }
     })();
 
-    function applyAuthUI(u){ $("login-btn").textContent = u ? "Logout" : "Login"; }
-    auth.onAuthStateChanged(applyAuthUI);
-    $("login-btn").onclick = async ()=>{
-      if(auth.currentUser){ await auth.signOut(); return; }
-      const email=prompt("Admin email:"); if(!email) return;
-      const pw=prompt("Password:"); if(pw==null) return;
-      try{ await auth.signInWithEmailAndPassword(email.trim(), pw); }
-      catch(e){ console.error(e); alert("Login failed. Check email/password or account access."); }
-    };
+function applyAuthUI(user){
+  const isAdmin = !!user && ADMIN_UIDS.has(user.uid);
+  document.body.classList.toggle("admin", isAdmin);
+  $("login-btn").textContent = user ? "Logout" : "Login";
+  console.log("Auth state:", user ? user.uid : "signed-out");
+}
+
+auth.onAuthStateChanged(applyAuthUI);
+
+$("login-btn").onclick = async ()=>{
+  if (auth.currentUser){
+    await auth.signOut();
+    return;
+  }
+  const email = prompt("Admin email:"); if (!email) return;
+  const pw    = prompt("Password:");    if (pw == null) return;
+  try{
+    const cred = await auth.signInWithEmailAndPassword(email.trim(), pw);
+    console.log("Signed in as:", cred.user.uid);
+  }catch(e){
+    console.error("Login failed:", e);
+    alert(`Login failed: ${e.code || e.message}`);
+  }
+};
+
 
     /* Units allowed (for help / template) */
     const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
