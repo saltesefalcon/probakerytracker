@@ -200,18 +200,20 @@
     ]);
     const $ = (id)=>document.getElementById(id);
 
+    /* Firebase */
     const firebaseConfig = {
-      apiKey: "AIzaSyAMnZy_gRIu43w6RyvcgRFHcV6xQjBAriM",
-      authDomain: "food-tracker-fd312.firebaseapp.com",
-      databaseURL: "https://food-tracker-fd312-default-rtdb.firebaseio.com",
-      projectId: "food-tracker-fd312",
-      storageBucket: "food-tracker-fd312.firebasestorage.app",
-      messagingSenderId: "1012475913662",
-      appId: "1:1012475913662:web:81837595030d4b8a8105ef"
+      apiKey: "AlzaSyBUI3_b1LPQ98uYnvkxJBAU-gE3Jj22X0I",
+      authDomain: "pro-bakery-tracker.firebaseapp.com",
+      databaseURL: "https://pro-bakery-tracker-default-rtdb.firebaseio.com",
+      projectId: "pro-bakery-tracker",
+      storageBucket: "pro-bakery-tracker.firebasestorage.app",
+      messagingSenderId: "<YOUR_SENDER_ID>",
+      appId: "1:<YOUR_SENDER_ID>:web:<YOUR_WEB_APP_ID>"
     };
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const fs = firebase.firestore();
+    
+    const db   = firebase.database();   // RTDB for logs
+    const fs   = firebase.firestore();  // Firestore for catalog
     const auth = firebase.auth();
 
     // Surface page-wide JS errors into the status text
