@@ -139,38 +139,6 @@
       <button class="btn primary" type="button" id="build-range-invoice" style="margin-top:8px;">Create Invoice (By Location & Date Range)</button>
     </div>
 
-    <!-- Inline Admin Catalog (quick edit) -->
-    <div class="panel section admin-only" style="margin-top:14px;">
-      <h2>Product Sales Catalog</h2>
-      <div class="muted">Edit full details in <a href="catalog_admin.html">Catalog Admin</a>. This mini editor lets you add/update single items.</div>
-      <div class="grid-3" style="margin-top:8px;">
-        <label>Name <input id="cat-name" placeholder="e.g., Chocolate Cake"></label>
-        <label>Base Unit
-          <select id="cat-baseunit">
-            <option value="each">each</option><option value="piece">piece</option>
-            <option value="kg">kg</option><option value="g">g</option><option value="lb">lb</option>
-            <option value="L">L</option><option value="ml">ml</option><option value="fl oz">fl oz</option>
-          </select>
-        </label>
-        <label>Price per Base Unit <input id="cat-price" type="number" step="0.01" placeholder="e.g., 25.00"></label>
-      </div>
-      <div class="grid-3" style="margin-top:8px;">
-        <label>Use Conversions?
-          <select id="cat-useconv"><option value="false">No</option><option value="true">Yes</option></select>
-        </label>
-        <label>Active?
-          <select id="cat-active"><option value="true">Active</option><option value="false">Inactive</option></select>
-        </label>
-        <div style="display:flex;align-items:flex-end;gap:10px">
-          <button id="cat-save" class="btn primary" type="button">Save / Update</button>
-          <button id="cat-clear" class="btn" type="button">Clear</button>
-        </div>
-      </div>
-      <hr class="sep">
-      <div class="muted" style="margin-bottom:6px;">Catalog Items</div>
-      <div id="catalog-list"></div>
-    </div>
-
     <!-- Invoice Modal -->
     <div id="invoice-modal">
       <div id="invoice-content">
