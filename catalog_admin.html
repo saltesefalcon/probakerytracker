@@ -348,7 +348,7 @@
       const btn = $("download-xlsx");
       if(!btn) return;
       // Use detected project base so this works both locally and on GH Pages
-      const TEMPLATE_URL = GH_BASE + "/templates/catalog_template.xlsx";
+      const TEMPLATE_URL = GH_BASE + "/public/templates/catalog_template.xlsx";
       btn.onclick = ()=>{
         const a=document.createElement("a");
         a.href = TEMPLATE_URL + "?v=" + Date.now(); // cache-bust
