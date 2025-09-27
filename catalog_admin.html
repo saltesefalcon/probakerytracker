@@ -149,6 +149,20 @@
       }
     }
 
+        <!-- somewhere in your <script> -->
+    const TEMPLATE_URL = "/templates/catalog_template.xlsx"; // adjust to your path
+    
+    $("download-xlsx").onclick = () => {
+      // simple and reliable: just serve the prebuilt template
+      const a = document.createElement("a");
+      a.href = TEMPLATE_URL;
+      a.download = "catalog_blank_template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    };
+
+
     /* ---------- Firebase ---------- */
     const ADMIN_UIDS = new Set([
       "In9nS195FPamjwoTM8aHDjJRq8r2",
