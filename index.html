@@ -279,13 +279,28 @@
     const unitSystems = {
       each:{units:["each"],toBase:{each:1}},
       piece:{units:["piece"],toBase:{piece:1}},
-      L:{units:["L","ml","fl oz"],toBase:{L:1,ml:1/1000,"fl oz":1/33.814}},
-      ml:{units:["ml","L","fl oz"],toBase:{ml:1,L:1000,"fl oz":1000/33.814}},
-      kg:{units:["kg","g","lb"],toBase:{kg:1,g:1/1000,lb:1/2.20462}},
-      g:{units:["g","kg","lb"],toBase:{g:1,kg:1000,lb:1000/2.20462}},
-      lb:{units:["lb","kg","g"],toBase:{lb:1,kg:2.20462,g:2.20462*1000}},
-      "fl oz":{units:["fl oz","L","ml"],toBase:{"fl oz":1,L:33.814,ml:33.814*1000}}
+    
+      // Base: L  -> converting selected unit *to liters*
+      L:{units:["L","ml","fl oz"],toBase:{L:1, ml:1/1000, "fl oz":1/33.814}},
+    
+      // Base: ml -> converting selected unit *to milliliters*
+      ml:{units:["ml","L","fl oz"],toBase:{ml:1, L:1000, "fl oz":1000/33.814}},
+    
+      // Base: kg -> converting selected unit *to kilograms*
+      kg:{units:["kg","g","lb"],toBase:{kg:1, g:1/1000, lb:1/2.20462}},
+    
+      // Base: g  -> converting selected unit *to grams*
+      g:{units:["g","kg","lb"],toBase:{g:1, kg:1000, lb:1000/2.20462}},
+    
+      // Base: lb -> converting selected unit *to pounds*
+      // FIX: g should be ~0.00220462 (not 2204.62)
+      lb:{units:["lb","kg","g"],toBase:{lb:1, kg:2.20462, g:1/453.592}},
+    
+      // Base: fl oz -> converting selected unit *to fluid ounces*
+      // FIX: ml should be ~0.033814 (not 33814)
+      "fl oz":{units:["fl oz","L","ml"],toBase:{"fl oz":1, L:33.814, ml:0.033814}}
     };
+
     const allowedUnits = (baseUnit,useConversions)=>{
       const sys = unitSystems[baseUnit] || {units:[baseUnit],toBase:{[baseUnit]:1}};
       return useConversions ? sys.units : [baseUnit];
