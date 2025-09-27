@@ -76,13 +76,14 @@
       <div class="muted" style="margin-top:8px">You must be logged in with an admin account to add/update/delete items.</div>
     </div>
 
-    <!-- List / CSV -->
+    <!-- List / CSV / XLSX -->
     <div class="panel" style="margin-top:14px;">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <input id="search" placeholder="Search products..." style="flex:1" />
         <button id="clear-search" class="btn">Clear</button>
         <button id="export" class="btn">Export CSV</button>
         <button id="blank-csv" class="btn">Download Blank CSV</button>
+        <button id="download-xlsx" class="btn">Download Excel Template (.xlsx)</button>
         <button id="import" class="btn">Import CSV</button>
         <input id="csv-file" type="file" accept=".csv" style="display:none" />
       </div>
@@ -113,6 +114,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+  <!-- SheetJS for XLSX generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
     const ADMIN_UIDS = new Set([
@@ -277,7 +280,6 @@
           await fs.collection("catalog").doc(editId).set(payload, { merge: false });
         } else {
           const id = slugify(name);
-          // warn if another item will be overwritten by same slug
           const existing = await fs.collection("catalog").doc(id).get();
           if (existing.exists && !confirm(`An item with id "${id}" already exists. Overwrite?`)) return;
           await fs.collection("catalog").doc(id).set(payload, { merge: false });
@@ -313,11 +315,60 @@
     };
 
     $("blank-csv").onclick = ()=>{
-      // Include all common columns so round-tripping is painless
       const rows=[["id (optional)","name","baseUnit","pricePerBase","useConversions","active"]];
       const csv=Papa.unparse(rows);
       const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
       const a=document.createElement("a"); a.href=url; a.download="catalog_blank.csv"; a.click(); URL.revokeObjectURL(url);
+    };
+
+    /* XLSX TEMPLATE with dropdowns */
+    $("download-xlsx").onclick = ()=>{
+      const wb = XLSX.utils.book_new();
+
+      // Units sheet
+      const unitsData = [["Units"], ...ALLOWED_UNITS.map(u=>[u])];
+      const wsUnits = XLSX.utils.aoa_to_sheet(unitsData);
+      XLSX.utils.book_append_sheet(wb, wsUnits, "Units");
+
+      // Booleans sheet for Yes/No dropdowns
+      const wsBool = XLSX.utils.aoa_to_sheet([["Booleans"],["true"],["false"]]);
+      XLSX.utils.book_append_sheet(wb, wsBool, "Booleans");
+
+      // Catalog entry sheet with headers
+      const header = [["id (optional)","name","baseUnit","pricePerBase","useConversions","active"]];
+      const ws = XLSX.utils.aoa_to_sheet(header);
+
+      // pre-size the sheet and apply data validation ranges (rows 2..1001)
+      ws["!ref"] = "A1:F1001";
+      ws["!dataValidation"] = [
+        // baseUnit list from Units sheet
+        {
+          sqref: "C2:C1001",
+          type: "list",
+          allowBlank: true,
+          showErrorMessage: true,
+          errorTitle: "Invalid Unit",
+          error: "Choose a unit from the dropdown.",
+          formula1: "=Units!$A$2:$A$" + (ALLOWED_UNITS.length+1)
+        },
+        // useConversions true/false
+        {
+          sqref: "E2:E1001",
+          type: "list",
+          allowBlank: true,
+          formula1: "=Booleans!$A$2:$A$3"
+        },
+        // active true/false
+        {
+          sqref: "F2:F1001",
+          type: "list",
+          allowBlank: true,
+          formula1: "=Booleans!$A$2:$A$3"
+        }
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, "Catalog");
+      XLSX.writeFile(wb, "catalog_blank_template.xlsx");
     };
 
     $("import").onclick = ()=> $("csv-file").click();
@@ -347,7 +398,6 @@
               }
               const id = idRaw ? slugify(idRaw) : slugify(name);
 
-              // upsert; if doc exists, count as overwrite
               const ref = fs.collection("catalog").doc(id);
               const exists = (await ref.get()).exists;
               await ref.set({ name, baseUnit, pricePerBase, useConversions, active }, { merge:false });
