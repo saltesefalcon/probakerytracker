@@ -82,10 +82,11 @@
         <input id="search" placeholder="Search products..." style="flex:1" />
         <button id="clear-search" class="btn">Clear</button>
         <button id="export" class="btn">Export CSV</button>
+        <button id="export-xlsx" class="btn">Export Excel (.xlsx with dropdowns)</button>
         <button id="blank-csv" class="btn">Download Blank CSV</button>
         <button id="download-xlsx" class="btn">Download Excel Template (.xlsx)</button>
-        <button id="import" class="btn">Import CSV</button>
-        <input id="csv-file" type="file" accept=".csv" style="display:none" />
+        <button id="import" class="btn">Import CSV/XLSX</button>
+        <input id="csv-file" type="file" accept=".csv,.xlsx" style="display:none" />
       </div>
 
       <div style="margin-top:16px;">
@@ -114,7 +115,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
-  <!-- SheetJS for XLSX generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
@@ -140,15 +140,14 @@
     const fs   = firebase.firestore();
     const auth = firebase.auth();
 
-    /* Better Firestore ping */
+    /* Firestore ping */
     async function ping(){
       try{
         await fs.collection("catalog").limit(1).get();
         $("fb-status").innerHTML = 'Firebase: <strong class="ok">connected</strong>';
       }catch(e){
         if(e.code === "permission-denied"){
-          $("fb-status").innerHTML =
-            'Firebase: <strong class="ok">connected</strong> <span class="status">(login required)</span>';
+          $("fb-status").innerHTML = 'Firebase: <strong class="ok">connected</strong> <span class="status">(login required)</span>';
         }else{
           console.error("Firestore ping error", e);
           $("fb-status").innerHTML = 'Firebase: <strong class="err">offline</strong>';
@@ -157,10 +156,10 @@
     }
     ping();
 
-    /* Auth UI */
+    /* Auth */
     function applyAuthUI(u){
       $("login-btn").textContent = u ? "Logout" : "Login";
-      render(); // re-render so actions reflect admin
+      render();
     }
     auth.onAuthStateChanged(applyAuthUI);
     $("login-btn").onclick = async ()=>{
@@ -173,10 +172,10 @@
 
     /* State */
     const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
-    const CATALOG = new Map(); // id -> data
+    const CATALOG = new Map();
     let editId = null;
 
-    /* Live subscribe + render */
+    /* Subscribe + render */
     fs.collection("catalog").onSnapshot(s=>{
       CATALOG.clear();
       s.forEach(d=> CATALOG.set(d.id, d.data()));
@@ -213,7 +212,6 @@
         tbody.appendChild(tr);
       });
 
-      // wire actions
       tbody.querySelectorAll("[data-edit]").forEach(btn=>{
         btn.onclick = ()=>{
           const id=btn.getAttribute("data-edit"); const cur=CATALOG.get(id); if(!cur) return;
@@ -231,191 +229,81 @@
           if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) return alert("Admin login required.");
           if(!confirm("Delete this product?")) return;
           try{ await fs.collection("catalog").doc(btn.getAttribute("data-del")).delete(); }
-          catch(e){
-            console.error(e);
-            alert(e.code === "permission-denied" ? "Permission denied by Firestore rules." : "Delete failed.");
-          }
+          catch(e){ console.error(e); alert("Delete failed."); }
         };
       });
     }
 
     $("clear-search").onclick = ()=>{ $("search").value=""; render(); };
+    $("clear").onclick = ()=>{ editId=null; $("name").value=""; $("baseUnit").value="each"; $("price").value=""; $("useconv").value="false"; $("active").value="true"; };
 
-    /* Form buttons */
-    $("clear").onclick = ()=>{
-      editId = null;
-      $("name").value=""; $("baseUnit").value="each"; $("price").value="";
-      $("useconv").value="false"; $("active").value="true";
-    };
+    const slugify = (s)=> s.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+    const parseBool = (v)=>{ if(typeof v==="boolean") return v; const t=String(v??"").trim().toLowerCase(); return ["true","1","yes","y"].includes(t); };
 
-    /* Helpers */
-    const slugify = (s)=> s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-    const parseBool = (v)=>{
-      if (typeof v === "boolean") return v;
-      const t = String(v ?? "").trim().toLowerCase();
-      return t === "true" || t === "1" || t === "yes" || t === "y";
-    };
-
-    /* Save / Update */
     $("save").onclick = async ()=>{
-      try { await auth.currentUser?.reload(); } catch(e) {}
-      const u = auth.currentUser;
-      if (!u || !ADMIN_UIDS.has(u.uid)) { alert("Admin login required."); return; }
+      try{ await auth.currentUser?.reload(); }catch(e){}
+      const u=auth.currentUser;
+      if(!u || !ADMIN_UIDS.has(u.uid)){ alert("Admin login required."); return; }
 
-      const name           = $("name").value.trim();
-      const baseUnit       = $("baseUnit").value;
-      const pricePerBase   = parseFloat($("price").value);
-      const useConversions = $("useconv").value === "true";
-      const active         = $("active").value === "true";
+      const name=$("name").value.trim();
+      const baseUnit=$("baseUnit").value;
+      const pricePerBase=parseFloat($("price").value);
+      const useConversions=$("useconv").value==="true";
+      const active=$("active").value==="true";
 
-      if (!name || !ALLOWED_UNITS.includes(baseUnit) || Number.isNaN(pricePerBase) || pricePerBase < 0) {
-        alert("Fill name, base unit, and a non-negative price.");
-        return;
+      if(!name || !ALLOWED_UNITS.includes(baseUnit) || isNaN(pricePerBase) || pricePerBase<0){
+        alert("Fill name, base unit, and a non-negative price."); return;
       }
+      const payload={name,baseUnit,pricePerBase,useConversions,active};
 
-      const payload = { name, baseUnit, pricePerBase, useConversions, active };
-
-      try {
-        if (editId) {
-          await fs.collection("catalog").doc(editId).set(payload, { merge: false });
-        } else {
-          const id = slugify(name);
-          const existing = await fs.collection("catalog").doc(id).get();
-          if (existing.exists && !confirm(`An item with id "${id}" already exists. Overwrite?`)) return;
-          await fs.collection("catalog").doc(id).set(payload, { merge: false });
-        }
-
-        // clear form
-        editId = null;
-        $("name").value = "";
-        $("baseUnit").value = "each";
-        $("price").value = "";
-        $("useconv").value = "false";
-        $("active").value = "true";
-      } catch (e) {
-        console.error(e);
-        alert(e.code === "permission-denied" ? "Permission denied by Firestore rules." : "Save failed.");
-      }
+      try{
+        if(editId){ await fs.collection("catalog").doc(editId).set(payload,{merge:false}); }
+        else{ const id=slugify(name); await fs.collection("catalog").doc(id).set(payload,{merge:false}); }
+        $("clear").click();
+      }catch(e){ console.error(e); alert("Save failed."); }
     };
 
-    /* CSV */
+    /* CSV Export */
     $("export").onclick = ()=>{
       const rows=[["id","name","baseUnit","pricePerBase","useConversions","active"]];
-      CATALOG.forEach((v,id)=> rows.push([
-        id,
-        v.name||"",
-        v.baseUnit||"",
-        Number(v.pricePerBase||0),
-        !!v.useConversions,
-        !!v.active
-      ]));
-      const csv = Papa.unparse(rows);
+      CATALOG.forEach((v,id)=> rows.push([id,v.name||"",v.baseUnit||"",Number(v.pricePerBase||0),!!v.useConversions,!!v.active]));
+      const csv=Papa.unparse(rows);
       const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
       const a=document.createElement("a"); a.href=url; a.download="catalog_export.csv"; a.click(); URL.revokeObjectURL(url);
     };
 
-    $("blank-csv").onclick = ()=>{
+    /* Excel Export with dropdowns + data */
+    function buildCatalogWorkbook(includeData=true){
+      const wb=XLSX.utils.book_new();
+      const wsUnits=XLSX.utils.aoa_to_sheet([["Units"],...ALLOWED_UNITS.map(u=>[u])]);
+      XLSX.utils.book_append_sheet(wb,wsUnits,"Units");
+      const wsBool=XLSX.utils.aoa_to_sheet([["Booleans"],["true"],["false"]]);
+      XLSX.utils.book_append_sheet(wb,wsBool,"Booleans");
+      const headers=["id (optional)","name","baseUnit","pricePerBase","useConversions","active"];
+      const rows=[headers];
+      if(includeData){ const dataRows=[]; CATALOG.forEach((v,id)=> dataRows.push([id,v.name||"",v.baseUnit||"",Number(v.pricePerBase||0),!!v.useConversions,!!v.active])); dataRows.sort((a,b)=> String(a[1]).localeCompare(String(b[1]))); rows.push(...dataRows);}
+      const ws=XLSX.utils.aoa_to_sheet(rows);
+      ws["!ref"]="A1:F1001";
+      ws["!dataValidation"]=[
+        {sqref:"C2:C1001",type:"list",allowBlank:true,formula1:"=Units!$A$2:$A$"+(ALLOWED_UNITS.length+1)},
+        {sqref:"E2:E1001",type:"list",allowBlank:true,formula1:"=Booleans!$A$2:$A$3"},
+        {sqref:"F2:F1001",type:"list",allowBlank:true,formula1:"=Booleans!$A$2:$A$3"}
+      ];
+      XLSX.utils.book_append_sheet(wb,ws,"Catalog");
+      return wb;
+    }
+    $("export-xlsx").onclick=()=>{ const wb=buildCatalogWorkbook(true); XLSX.writeFile(wb,"catalog_export.xlsx"); };
+    $("download-xlsx").onclick=()=>{ const wb=buildCatalogWorkbook(false); XLSX.writeFile(wb,"catalog_blank_template.xlsx"); };
+
+    $("blank-csv").onclick=()=>{
       const rows=[["id (optional)","name","baseUnit","pricePerBase","useConversions","active"]];
-      const csv=Papa.unparse(rows);
-      const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
+      const csv=Papa.unparse(rows); const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
       const a=document.createElement("a"); a.href=url; a.download="catalog_blank.csv"; a.click(); URL.revokeObjectURL(url);
     };
 
-    /* XLSX TEMPLATE with dropdowns */
-    $("download-xlsx").onclick = ()=>{
-      const wb = XLSX.utils.book_new();
-
-      // Units sheet
-      const unitsData = [["Units"], ...ALLOWED_UNITS.map(u=>[u])];
-      const wsUnits = XLSX.utils.aoa_to_sheet(unitsData);
-      XLSX.utils.book_append_sheet(wb, wsUnits, "Units");
-
-      // Booleans sheet for Yes/No dropdowns
-      const wsBool = XLSX.utils.aoa_to_sheet([["Booleans"],["true"],["false"]]);
-      XLSX.utils.book_append_sheet(wb, wsBool, "Booleans");
-
-      // Catalog entry sheet with headers
-      const header = [["id (optional)","name","baseUnit","pricePerBase","useConversions","active"]];
-      const ws = XLSX.utils.aoa_to_sheet(header);
-
-      // pre-size the sheet and apply data validation ranges (rows 2..1001)
-      ws["!ref"] = "A1:F1001";
-      ws["!dataValidation"] = [
-        // baseUnit list from Units sheet
-        {
-          sqref: "C2:C1001",
-          type: "list",
-          allowBlank: true,
-          showErrorMessage: true,
-          errorTitle: "Invalid Unit",
-          error: "Choose a unit from the dropdown.",
-          formula1: "=Units!$A$2:$A$" + (ALLOWED_UNITS.length+1)
-        },
-        // useConversions true/false
-        {
-          sqref: "E2:E1001",
-          type: "list",
-          allowBlank: true,
-          formula1: "=Booleans!$A$2:$A$3"
-        },
-        // active true/false
-        {
-          sqref: "F2:F1001",
-          type: "list",
-          allowBlank: true,
-          formula1: "=Booleans!$A$2:$A$3"
-        }
-      ];
-
-      XLSX.utils.book_append_sheet(wb, ws, "Catalog");
-      XLSX.writeFile(wb, "catalog_blank_template.xlsx");
-    };
-
-    $("import").onclick = ()=> $("csv-file").click();
-
-    $("csv-file").addEventListener("change", async ev=>{
-      const file=ev.target.files[0]; if(!file) return;
-      if(!auth.currentUser || !ADMIN_UIDS.has(auth.currentUser.uid)) { alert("Admin login required."); ev.target.value=""; return; }
-
-      Papa.parse(file,{
-        header:true,
-        skipEmptyLines:true,
-        complete: async (res)=>{
-          const rows=res.data||[]; if(!rows.length) return alert("No rows found.");
-          let upserts=0, skipped=0, overwritten=0;
-
-          for(const r of rows){
-            try{
-              const name=(r.name||"").trim();
-              const baseUnit=(r.baseUnit||"each").trim();
-              const pricePerBase=parseFloat(r.pricePerBase);
-              const idRaw=(r.id||"").trim();
-              const useConversions=parseBool(r.useConversions);
-              const active=parseBool(r.active);
-
-              if(!name || !ALLOWED_UNITS.includes(baseUnit) || !isFinite(pricePerBase) || pricePerBase < 0){
-                skipped++; continue;
-              }
-              const id = idRaw ? slugify(idRaw) : slugify(name);
-
-              const ref = fs.collection("catalog").doc(id);
-              const exists = (await ref.get()).exists;
-              await ref.set({ name, baseUnit, pricePerBase, useConversions, active }, { merge:false });
-              exists ? overwritten++ : upserts++;
-            }catch(e){
-              console.error(e);
-              skipped++;
-            }
-          }
-
-          alert(`Import complete.\nCreated: ${upserts}\nOverwritten: ${overwritten}\nSkipped: ${skipped}`);
-          ev.target.value="";
-        }
-      });
-    });
-  </script>
-</body>
-</html>
+    /* Import CSV or XLSX */
+    $("import").onclick=()=> $("csv-file").click();
+    $("csv-file").addEventListener
 
 
 
