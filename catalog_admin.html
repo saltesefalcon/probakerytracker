@@ -75,15 +75,15 @@
       <div class="muted" style="margin-top:8px">You must be logged in with an admin account to add/update/delete items.</div>
     </div>
 
-    <!-- List / CSV / XLSX -->
+    <!-- List / Import / Export -->
     <div class="panel" style="margin-top:14px;">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <input id="search" placeholder="Search products..." style="flex:1" />
         <button id="clear-search" class="btn">Clear</button>
         <button id="export" class="btn">Export CSV</button>
-        <button id="export-xlsx" class="btn">Export Excel (.xlsx with dropdowns)</button>
+        <button id="export-xlsx" class="btn">Export Excel (.xlsx, no dropdowns)</button>
         <button id="blank-csv" class="btn">Download Blank CSV</button>
-        <button id="download-xlsx" class="btn">Download Excel Template (.xlsx)</button>
+        <button id="download-xlsx" class="btn">Download Excel Template (.xlsx with dropdowns)</button>
         <button id="import" class="btn">Import CSV/XLSX</button>
         <input id="csv-file" type="file" accept=".csv,.xlsx" style="display:none" />
       </div>
@@ -109,7 +109,7 @@
     </div>
   </div>
 
-  <!-- Libs (primary) -->
+  <!-- Libs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -117,10 +117,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
-    /* ---------- Helpers & XLSX fallback ---------- */
+    /* ---------- Small helpers & Excel fallback ---------- */
     function $(id){ return document.getElementById(id); }
 
-    // If the primary XLSX CDN fails to load, try a fallback; also provide a robust saver
+    // Fallback XLSX loader + robust saver
     (function ensureXLSX(){
       function fallback(){
         var s=document.createElement('script');
@@ -131,37 +131,20 @@
     })();
 
     function saveWorkbook(wb, filename){
+      try{ if (XLSX && XLSX.writeFile) return XLSX.writeFile(wb, filename); }catch(e){}
       try{
-        if (typeof XLSX !== "undefined" && XLSX.writeFile) {
-          XLSX.writeFile(wb, filename);
-          return;
-        }
-      }catch(e){}
-      try{
-        const data = XLSX.write(wb, { bookType:"xlsx", type:"array" });
-        const blob = new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href=url; a.download=filename; a.click();
-        URL.revokeObjectURL(url);
-      }catch(e){
-        console.error("XLSX save failed:", e);
-        alert("Could not generate the Excel file. Refresh and ensure the XLSX script isn’t blocked.");
-      }
+        const data=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+        const blob=new Blob([data],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement("a"); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+      }catch(e){ console.error("XLSX save failed:", e); alert("Could not generate Excel. Refresh and try again."); }
     }
 
-        <!-- somewhere in your <script> -->
-    const TEMPLATE_URL = "/templates/catalog_template.xlsx"; // adjust to your path
-    
-    $("download-xlsx").onclick = () => {
-      // simple and reliable: just serve the prebuilt template
-      const a = document.createElement("a");
-      a.href = TEMPLATE_URL;
-      a.download = "catalog_blank_template.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    };
-
+    // Detect project base path (works on GitHub Pages project sites)
+    const GH_BASE = (()=>{
+      const seg = location.pathname.split("/").filter(Boolean)[0] || "";
+      return seg ? ("/" + seg) : "";
+    })();
 
     /* ---------- Firebase ---------- */
     const ADMIN_UIDS = new Set([
@@ -214,42 +197,32 @@
 
     /* ---------- State ---------- */
     const ALLOWED_UNITS = ["each","piece","kg","g","lb","L","ml","fl oz"];
-    const CATALOG = new Map();
-    let editId = null;
     let _lastGoodRows = [];
+    let editId = null;
 
-    /* ---------- Live subscribe with fail-loud error handling ---------- */
+    /* ---------- Live subscribe with fail-loud errors ---------- */
     fs.collection("catalog").onSnapshot(
       (s)=>{
-        const rows=[];
-        s.forEach(d=> rows.push({id:d.id, ...d.data()}));
+        const rows=[]; s.forEach(d=> rows.push({id:d.id, ...d.data()}));
         _lastGoodRows = rows;
         renderWithRows(rows);
       },
       (err)=>{
         console.error("catalog onSnapshot error:", err);
-        $("fb-status").innerHTML = 'Firebase: <strong class="err">read error</strong> ' +
-          '<span class="status">'+ (err.code||err.message||"") +'</span>';
-        // show last known good data if available
+        $("fb-status").innerHTML = 'Firebase: <strong class="err">read error</strong> <span class="status">'+(err.code||err.message||"")+'</span>';
         renderWithRows(_lastGoodRows);
-        if (err.code === "permission-denied") {
-          alert("Login required to view catalog. Click Login (top-right).");
-        }
+        if (err.code === "permission-denied") alert("Login required to view catalog. Click Login (top-right).");
       }
     );
 
     /* ---------- Render ---------- */
     function renderWithRows(rows){
-      const q = $("search").value.trim().toLowerCase();
       const tbody = $("tbody"); tbody.innerHTML = "";
+      const q = $("search").value.trim().toLowerCase();
       const sorted = [...rows].sort((a,b)=> (a.name||"").localeCompare(b.name||""));
       let filtered = sorted.filter(r=> !q || (r.name||"").toLowerCase().includes(q));
 
-      // If the search is hiding everything, auto-clear once for convenience
-      if (!filtered.length && q) {
-        $("search").value = "";
-        filtered = sorted;
-      }
+      if(!filtered.length && q){ $("search").value=""; filtered=sorted; }
 
       if(!filtered.length){
         const tr=document.createElement("tr");
@@ -273,11 +246,11 @@
         tbody.appendChild(tr);
       });
 
-      // wire actions
+      // actions
       tbody.querySelectorAll("[data-edit]").forEach(btn=>{
         btn.onclick = ()=>{
           const id=btn.getAttribute("data-edit");
-          const cur=rows.find(r=>r.id===id); if(!cur) return;
+          const cur=_lastGoodRows.find(r=>r.id===id); if(!cur) return;
           editId = id;
           $("name").value = cur.name||"";
           $("baseUnit").value = cur.baseUnit||"each";
@@ -300,7 +273,6 @@
       });
     }
 
-    // search & clear
     $("clear-search").onclick = ()=>{ $("search").value=""; renderWithRows(_lastGoodRows); };
 
     /* ---------- Form actions ---------- */
@@ -318,34 +290,33 @@
       const u = auth.currentUser;
       if (!u || !ADMIN_UIDS.has(u.uid)) { alert("Admin login required."); return; }
 
-      const name           = $("name").value.trim();
-      const baseUnit       = $("baseUnit").value;
-      const pricePerBase   = parseFloat($("price").value);
+      const name = $("name").value.trim();
+      const baseUnit = $("baseUnit").value;
+      const pricePerBase = parseFloat($("price").value);
       const useConversions = $("useconv").value === "true";
-      const active         = $("active").value === "true";
+      const active = $("active").value === "true";
 
       if (!name || !ALLOWED_UNITS.includes(baseUnit) || Number.isNaN(pricePerBase) || pricePerBase < 0) {
-        alert("Fill name, base unit, and a non-negative price.");
-        return;
+        alert("Fill name, base unit, and a non-negative price."); return;
       }
-
       const payload = { name, baseUnit, pricePerBase, useConversions, active };
 
-      try {
+      try{
         if (editId) {
-          await fs.collection("catalog").doc(editId).set(payload, { merge: false });
+          await fs.collection("catalog").doc(editId).set(payload, { merge:false });
         } else {
           const id = slugify(name);
-          await fs.collection("catalog").doc(id).set(payload, { merge: false });
+          await fs.collection("catalog").doc(id).set(payload, { merge:false });
         }
         $("clear").click();
-      } catch (e) {
+      }catch(e){
         console.error(e);
         alert(e.code === "permission-denied" ? "Permission denied by Firestore rules." : "Save failed.");
       }
     };
 
-    /* ---------- CSV Export ---------- */
+    /* ---------- Exports ---------- */
+    // CSV
     $("export").onclick = ()=>{
       const rows=[["id","name","baseUnit","pricePerBase","useConversions","active"]];
       _lastGoodRows.forEach(r=> rows.push([r.id, r.name||"", r.baseUnit||"", Number(r.pricePerBase||0), !!r.useConversions, !!r.active]));
@@ -354,51 +325,40 @@
       const a=document.createElement("a"); a.href=url; a.download="catalog_export.csv"; a.click(); URL.revokeObjectURL(url);
     };
 
-    /* ---------- Excel workbook builders ---------- */
-    function buildCatalogWorkbook(includeData = true) {
+    // Excel (no dropdowns — library limitation)
+    $("export-xlsx").onclick = ()=>{
+      const headers=["id","name","baseUnit","pricePerBase","useConversions","active"];
+      const data = _lastGoodRows.map(r=>[r.id, r.name||"", r.baseUnit||"", Number(r.pricePerBase||0), !!r.useConversions, !!r.active]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
       const wb = XLSX.utils.book_new();
-
-      // Units sheet for baseUnit dropdown
-      const wsUnits = XLSX.utils.aoa_to_sheet([["Units"], ...ALLOWED_UNITS.map(u=>[u])]);
-      XLSX.utils.book_append_sheet(wb, wsUnits, "Units");
-
-      // Booleans (true/false) sheet
-      const wsBool = XLSX.utils.aoa_to_sheet([["Booleans"],["true"],["false"]]);
-      XLSX.utils.book_append_sheet(wb, wsBool, "Booleans");
-
-      // Catalog sheet
-      const headers=["id (optional)","name","baseUnit","pricePerBase","useConversions","active"];
-      const rows=[headers];
-      if (includeData) {
-        const dataRows = _lastGoodRows
-          .map(r=> [r.id, r.name||"", r.baseUnit||"", Number(r.pricePerBase||0), !!r.useConversions, !!r.active])
-          .sort((a,b)=> String(a[1]).localeCompare(String(b[1])));
-        rows.push(...dataRows);
-      }
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-
-      // validation over a generous range
-      ws["!ref"] = "A1:F1001";
-      ws["!dataValidation"] = [
-        { sqref:"C2:C1001", type:"list", allowBlank:true, showErrorMessage:true, errorTitle:"Invalid Unit", error:"Choose a unit from the dropdown.", formula1:"=Units!$A$2:$A$"+(ALLOWED_UNITS.length+1) },
-        { sqref:"E2:E1001", type:"list", allowBlank:true, formula1:"=Booleans!$A$2:$A$3" },
-        { sqref:"F2:F1001", type:"list", allowBlank:true, formula1:"=Booleans!$A$2:$A$3" }
-      ];
-
       XLSX.utils.book_append_sheet(wb, ws, "Catalog");
-      return wb;
-    }
+      saveWorkbook(wb, "catalog_export.xlsx");
+    };
 
-    $("export-xlsx").onclick = ()=>{ const wb = buildCatalogWorkbook(true);  saveWorkbook(wb, "catalog_export.xlsx"); };
-    $("download-xlsx").onclick = ()=>{ const wb = buildCatalogWorkbook(false); saveWorkbook(wb, "catalog_blank_template.xlsx"); };
-
-    /* ---------- Blank CSV ---------- */
+    // Blank CSV
     $("blank-csv").onclick = ()=>{
       const rows=[["id (optional)","name","baseUnit","pricePerBase","useConversions","active"]];
       const csv=Papa.unparse(rows);
       const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
       const a=document.createElement("a"); a.href=url; a.download="catalog_blank.csv"; a.click(); URL.revokeObjectURL(url);
     };
+
+    // Static Excel Template with dropdowns (served file)
+    (function wireStaticTemplate(){
+      const btn = $("download-xlsx");
+      if(!btn) return;
+      // Use detected project base so this works both locally and on GH Pages
+      const TEMPLATE_URL = GH_BASE + "/templates/catalog_template.xlsx";
+      btn.onclick = ()=>{
+        const a=document.createElement("a");
+        a.href = TEMPLATE_URL + "?v=" + Date.now(); // cache-bust
+        a.download = "catalog_blank_template.xlsx";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      };
+    })();
 
     /* ---------- Import CSV or XLSX ---------- */
     $("import").onclick = ()=> $("csv-file").click();
@@ -417,14 +377,11 @@
             const base=(r.baseUnit||"each").trim();
             const price=parseFloat(r.pricePerBase);
             const idRaw=(r.id||"").trim();
-            const useC = (typeof r.useConversions==="undefined") ? false : r.useConversions;
-            const act  = (typeof r.active==="undefined") ? true  : r.active;
-
-            const useConversions = parseBool(useC);
-            const active = parseBool(act);
+            const useConversions=parseBool(r.useConversions ?? false);
+            const active=parseBool(r.active ?? true);
 
             if(!nm || !ALLOWED_UNITS.includes(base) || !isFinite(price) || price<0){ skipped++; continue; }
-            const id = idRaw ? slugify(idRaw) : slugify(nm);
+            const id = idRaw ? idRaw.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"") : nm.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
 
             const ref=fs.collection("catalog").doc(id);
             const exists=(await ref.get()).exists;
@@ -446,12 +403,8 @@
           await upsertMany(rows);
         }else{
           Papa.parse(file,{
-            header:true,
-            skipEmptyLines:true,
-            complete: async (res)=>{
-              const rows=res.data||[]; if(!rows.length){ alert("No rows found."); return; }
-              await upsertMany(rows);
-            }
+            header:true, skipEmptyLines:true,
+            complete: async (res)=>{ const rows=res.data||[]; if(!rows.length){ alert("No rows found."); return; } await upsertMany(rows); }
           });
         }
       }finally{
@@ -461,6 +414,7 @@
   </script>
 </body>
 </html>
+
 
 
 
