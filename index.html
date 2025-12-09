@@ -294,6 +294,7 @@
     let selectedMonth = new Date().toISOString().slice(0,7);
 
     const unitSystems = {
+      case:{units:["case"],toBase:{case:1}},
       each:{units:["each"],toBase:{each:1}},
       piece:{units:["piece"],toBase:{piece:1}},
       L:{units:["L","ml","fl oz"],toBase:{L:1, ml:1/1000, "fl oz":1/33.814}},
