@@ -23,7 +23,7 @@
     .section h2{margin:4px 0 10px;font-size:1.1rem;color:var(--gold)}
     .row{display:flex;gap:10px;flex-wrap:wrap}
 
-    /* Labels stack so Unit line up with others */
+    /* Make labels stack like the other inputs, so Unit aligns */
     label{
       display:flex;
       flex-direction:column;
@@ -50,7 +50,7 @@
 
     .item{background:var(--card);border:1px solid var(--line);padding:12px;border-radius:12px;margin-bottom:12px;position:relative}
 
-    /* Row: Product | Amount | Unit | [Delete] */
+    /* Row: Product | Amount | Unit | [Delete] — equal widths for first three */
     .item .row-line{
       display:grid;
       grid-template-columns: 1fr 1fr 1fr auto;
@@ -63,6 +63,7 @@
       display:flex;
       gap:8px;
     }
+    /* Let Unit dropdown expand like others; cap only on small screens */
     .item select[name="unit"]{ max-width:100%; }
 
     @media (max-width:700px){
@@ -226,7 +227,7 @@
       if (s) s.innerHTML = 'Firebase: <strong class="err">' + (e.message || 'script error') + '</strong>';
     });
 
-    // RTDB connection badge
+    // Solid connection badge (RTDB .info/connected)
     (function watchFirebaseConnection(){
       const status = $("fb-status");
       try{
@@ -285,8 +286,8 @@
       ml:{units:["ml","L","fl oz"],toBase:{ml:1, L:1000, "fl oz":1000/33.814}},
       kg:{units:["kg","g","lb"],toBase:{kg:1, g:1/1000, lb:1/2.20462}},
       g:{units:["g","kg","lb"],toBase:{g:1, kg:1000, lb:1000/2.20462}},
-      lb:{units:["lb","kg","g"],toBase:{lb:1, kg:2.20462, g:1/453.592}},
-      "fl oz":{units:["fl oz","L","ml"],toBase:{"fl oz":1, L:33.814, ml:0.033814}}
+      lb:{units:["lb","kg","g"],toBase:{lb:1, kg:2.20462, g:1/453.592}},           /* fixed */
+      "fl oz":{units:["fl oz","L","ml"],toBase:{"fl oz":1, L:33.814, ml:0.033814}}  /* fixed */
     };
     const allowedUnits = (baseUnit,useConversions)=>{
       const sys = unitSystems[baseUnit] || {units:[baseUnit],toBase:{[baseUnit]:1}};
@@ -475,6 +476,17 @@
       const groups=document.querySelectorAll('#items-container .item');
       if (!groups.length) return alert("Add at least one item.");
 
+      // Permission guard: only alert when submitting
+      try{
+        const testKey = db.ref('logs').push().key;
+        await db.ref(`logs/__canwrite/${selectedMonth}/${testKey}`).set({ts:Date.now()});
+        await db.ref(`logs/__canwrite/${selectedMonth}/${testKey}`).remove();
+      }catch(e){
+        console.error("Write blocked on submit:", e);
+        alert("You’re not signed in to write to the database.\n\nClick Login (top-right) with an admin account, then try again.");
+        return;
+      }
+
       try{
         for(const g of groups){
           const prodId=g.querySelector('[name="product"]').value;
@@ -489,16 +501,9 @@
           const upd={}; upd[`logs/${from}/${selectedMonth}/${key}`]=out; upd[`logs/${to}/${selectedMonth}/${key}`]=inn;
           await db.ref().update(upd);
         }
-      }catch(e){
-        console.error("Submit failed:", e);
-        return alert("Submit failed: "+(e?.code||e?.message||e));
-      }
+      }catch(e){ console.error("Submit failed:", e); return alert("Submit failed: "+(e?.code||e?.message||e)); }
 
-      $("items-container").innerHTML="";
-      $("date").valueAsDate=new Date();
-      $("to").selectedIndex=0;
-      addItem();
-      requestLoadLogs();
+      $("items-container").innerHTML=""; $("date").valueAsDate=new Date(); $("to").selectedIndex=0; addItem(); requestLoadLogs();
     }
 
     /* ---------- Invoice ---------- */
@@ -637,7 +642,7 @@
       subscribeCatalog();
     })();
 
-    /* Idle logout (keep this – removes users after 10 minutes idle) */
+    /* Idle logout (only on real inactivity, not on page navigation) */
     let idleTimeout;
     const resetIdle = ()=>{ clearTimeout(idleTimeout);
       idleTimeout = setTimeout(async ()=>{ 
@@ -652,4 +657,5 @@
   </script>
 </body>
 </html>
+
 
