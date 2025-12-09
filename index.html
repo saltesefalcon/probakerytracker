@@ -476,45 +476,69 @@
         alert("Edit failed: " + (e?.code || e?.message || e));
       }
     }
-
     async function addTransfer(){
-      const date=$("date").value; const from="Pro-Bakery"; const to=$("to").value;
-      if(!date||!to) return alert("Select a date and destination.");
-      selectedMonth=date.slice(0,7);
+      const date = $("date").value;
+      const from = "Pro-Bakery";
+      const to   = $("to").value;
 
-      const groups=document.querySelectorAll('#items-container .item');
-      if (!groups.length) return alert("Add at least one item.");
+      if (!date || !to) {
+        alert("Select a date and destination.");
+        return;
+      }
 
-      // Permission guard: only alert when submitting
-      try{
-        const testKey = db.ref('logs').push().key;
-        await db.ref(`logs/__canwrite/${selectedMonth}/${testKey}`).set({ts:Date.now()});
-        await db.ref(`logs/__canwrite/${selectedMonth}/${testKey}`).remove();
-      }catch(e){
-        console.error("Write blocked on submit:", e);
-        alert("You’re not signed in to write to the database.\n\nClick Login (top-right) with an admin account, then try again.");
+      // Require any signed-in user (RTDB rules also enforce auth != null)
+      if (!auth.currentUser) {
+        alert("You’re not signed in.\n\nClick Login (top-right) with an admin account, then try again.");
+        return;
+      }
+
+      selectedMonth = date.slice(0,7);
+
+      const groups = document.querySelectorAll('#items-container .item');
+      if (!groups.length) {
+        alert("Add at least one item.");
         return;
       }
 
       try{
-        for(const g of groups){
-          const prodId=g.querySelector('[name="product"]').value;
-          const prod=catalog.get(prodId); const productName=prod?.name||"";
-          const amt=parseFloat(g.querySelector('[name="amount"]').value);
-          const unit=g.querySelector('[name="unit"]').value;
-          const cpu=parseFloat(g.querySelector('[name="cost"]').value);
-          if(!productName || isNaN(amt)) return alert("Complete all item fields.");
-          const key=db.ref('logs').push().key;
-          const out={date,from,to,product:productName,unit,costPerUnit:cpu,comment:"",amount:-amt};
-          const inn={date,from,to,product:productName,unit,costPerUnit:cpu,comment:"",amount: amt};
-          const upd={}; upd[`logs/${from}/${selectedMonth}/${key}`]=out; upd[`logs/${to}/${selectedMonth}/${key}`]=inn;
+        for (const g of groups){
+          const prodId = g.querySelector('[name="product"]').value;
+          const prod   = catalog.get(prodId);
+          const productName = prod?.name || "";
+          const amt    = parseFloat(g.querySelector('[name="amount"]').value);
+          const unit   = g.querySelector('[name="unit"]').value;
+          const cpu    = parseFloat(g.querySelector('[name="cost"]').value);
+
+          if (!productName || isNaN(amt)) {
+            alert("Complete all item fields.");
+            return;
+          }
+
+          const key = db.ref('logs').push().key;
+          const out = { date, from, to, product:productName, unit, costPerUnit:cpu, comment:"", amount:-amt };
+          const inn = { date, from, to, product:productName, unit, costPerUnit:cpu, comment:"", amount: amt };
+
+          const upd = {};
+          upd[`logs/${from}/${selectedMonth}/${key}`] = out;
+          upd[`logs/${to}/${selectedMonth}/${key}`]   = inn;
+
           await db.ref().update(upd);
         }
-      }catch(e){ console.error("Submit failed:", e); return alert("Submit failed: "+(e?.code||e?.message||e)); }
+      } catch(e) {
+        console.error("Submit failed:", e);
+        alert("Submit failed: " + (e?.code || e?.message || e));
+        return;
+      }
 
-      $("items-container").innerHTML=""; $("date").valueAsDate=new Date(); $("to").selectedIndex=0; addItem();
+      // Reset form + keep reports month in sync
+      $("items-container").innerHTML = "";
+      $("date").valueAsDate = new Date();
+      $("to").selectedIndex = 0;
+      addItem();
+
       const monthInput = $("report-month");
       if (monthInput) monthInput.value = selectedMonth;
+
       requestLoadLogs();
     }
 
