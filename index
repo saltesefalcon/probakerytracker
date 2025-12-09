@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pro-Bakery Transfer Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    :root{
+      --bg:#0b0b0e; --panel:#121218; --ink:#f6f6f6; --muted:#a6a6b0;
+      --gold:#d4af37; --gold-2:#b99416; --red:#ef4444; --green:#22c55e; --line:#23232b; --card:#171720;
+    }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    a{color:var(--gold);text-decoration:none}
+    .wrap{max-width:1100px;margin:24px auto;padding:16px}
+    .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{margin:0;font-size:1.7rem;letter-spacing:.3px}
+    h1 .brand{color:var(--gold)}
+    .sub{color:var(--muted);font-size:.95rem}
+    .status{color:var(--muted);font-size:.92rem}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 20px rgba(0,0,0,.25)}
+    .section{padding:14px}
+    .section h2{margin:4px 0 10px;font-size:1.1rem;color:var(--gold)}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+
+    /* Make labels stack like the other inputs, so Unit aligns */
+    label{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      font-weight:600;
+      font-size:.95rem;
+      color:var(--muted);
+    }
+
+    input, select{width:100%;padding:10px 12px;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:1rem}
+    input[readonly]{opacity:.85}
+    .btn{cursor:pointer;border:1px solid var(--gold);background:transparent;color:var(--gold);transition:.2s;border-radius:12px;padding:10px 12px}
+    .btn:hover{background:var(--gold);color:var(--bg)}
+    .btn.primary{background:var(--gold);color:var(--bg);border:1px solid var(--gold)}
+    .btn.primary:hover{background:var(--gold-2);border-color:var(--gold-2)}
+    .btn.danger{border-color:var(--red);color:var(--red)}
+    .btn.danger:hover{background:var(--red);color:#fff}
+    .btn.block{display:block;width:100%}
+    .muted{color:var(--muted);font-size:.9rem}
+    .ok{color:var(--green)}
+    .err{color:#f87171}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+
+    .item{background:var(--card);border:1px solid var(--line);padding:12px;border-radius:12px;margin-bottom:12px;position:relative}
+
+    /* Row: Product | Amount | Unit | [Delete] — equal widths for first three */
+    .item .row-line{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      gap:10px;
+      align-items:start;
+    }
+    .item .row-actions{
+      justify-self:end;
+      align-self:end;
+      display:flex;
+      gap:8px;
+    }
+    /* Let Unit dropdown expand like others; cap only on small screens */
+    .item select[name="unit"]{ max-width:100%; }
+
+    @media (max-width:700px){
+      .item .row-line{ grid-template-columns:1fr; }
+      .item .row-actions{ justify-self:start; }
+      .item select[name="unit"]{ max-width:100%; }
+    }
+
+    .total-value{font-size:.95rem;color:#e6e6e6;margin-top:6px}
+    .log-entry{background:var(--card);border:1px solid var(--line);padding:10px;border-radius:12px;margin:8px 0}
+    .log-entry.completed{opacity:.6}
+    .admin-only{display:none}
+    body.admin .admin-only{display:block}
+    .tag{padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:.8rem;color:var(--muted)}
+    .tag.gold{border-color:var(--gold);color:var(--gold)}
+    hr.sep{border:none;border-top:1px solid var(--line);margin:12px 0}
+    #items-container{margin:10px 0}
+
+    /* Invoice modal */
+    #invoice-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.82);z-index:1000}
+    #invoice-content{position:absolute;top:5%;left:5%;width:90%;height:90%;background:#fff;border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+    #invoice-iframe{flex:1;border:none}
+    #invoice-buttons{padding:10px;text-align:right;background:#f0f0f0}
+    #invoice-buttons button{margin-left:8px}
+
+    @media (max-width:700px){ .grid-3,.grid-2{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h1><span class="brand">Pro-Bakery</span> Transfer Tracker</h1>
+        <div class="sub">Log transfers from <strong>Pro-Bakery</strong> to your locations, with product/units/prices driven by the catalog.</div>
+      </div>
+      <div>
+        <a class="btn" href="catalog_admin.html" style="margin-right:8px">Catalog Admin</a>
+        <span id="fb-status" class="status">Firebase: <em>checking…</em></span>
+        <button id="login-btn" type="button" class="btn primary" style="margin-left:10px">Login</button>
+      </div>
+    </div>
+
+    <!-- Entry Panel -->
+    <div class="panel section">
+      <h2>New Transfer</h2>
+      <div class="grid-3">
+        <label>Date
+          <input type="date" id="date">
+        </label>
+        <label>From
+          <input type="text" value="Pro-Bakery" readonly>
+        </label>
+        <label>To
+          <select id="to"></select>
+        </label>
+      </div>
+
+      <div id="items-container"></div>
+      <button id="add-item-btn" type="button" class="btn block">Add Item</button>
+      <button id="submit-btn" type="button" class="btn primary block" style="margin-top:8px;">Submit Transfer</button>
+
+      <div class="muted" style="margin-top:8px">Totals and cost are auto-filled from the product catalog. Admins can edit the catalog in <a href="catalog_admin.html">Catalog Admin</a>.</div>
+    </div>
+
+    <!-- Logs -->
+    <div class="panel section" style="margin-top:14px;">
+      <h2>
+        Logs by Location
+        <span class="tag gold" style="margin-left:6px" id="current-month"></span>
+      </h2>
+      <div class="muted">Navigate months to review activity.</div>
+      <div style="margin:8px 0;">
+        <button class="btn" type="button" onclick="changeMonth(-1)">&lt; Prev</button>
+        <button class="btn" type="button" onclick="changeMonth(1)" style="margin-left:8px;">Next &gt;</button>
+      </div>
+      <div id="logs"></div>
+    </div>
+
+    <!-- Reports -->
+    <div class="panel section admin-only" style="margin-top:14px;">
+      <h2>Reports</h2>
+      <div class="grid-2">
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Download monthly workbook (all locations)</div>
+          <div class="row" style="margin-bottom:6px;">
+            <label class="inline" style="flex:1">Month
+              <!-- NEW: month selector for monthly report -->
+              <input type="month" id="report-month">
+            </label>
+          </div>
+          <button class="btn primary" type="button" onclick="exportExcel()">Download Monthly Report</button>
+        </div>
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Download by date range (all locations)</div>
+          <div class="row">
+            <label class="inline" style="flex:1">From <input type="date" id="report-start"></label>
+            <label class="inline" style="flex:1">To <input type="date" id="report-end"></label>
+          </div>
+          <button class="btn" type="button" onclick="exportDateRange()" style="margin-top:8px;">Download Report by Date</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Invoice Builder -->
+    <div class="panel section admin-only" style="margin-top:14px;">
+      <h2>Invoice Builder</h2>
+      <div class="muted" style="margin-bottom:6px;">Build an invoice for all transfers (in & out) for one location within a date range.</div>
+      <div class="row">
+        <label class="inline" style="flex:1">Location <select id="inv-loc"></select></label>
+        <label class="inline" style="flex:1">Start <input type="date" id="inv-start"></label>
+        <label class="inline" style="flex:1">End <input type="date" id="inv-end"></label>
+      </div>
+      <button class="btn primary" type="button" id="build-range-invoice" style="margin-top:8px;">Create Invoice (By Location & Date Range)</button>
+    </div>
+
+    <!-- Invoice Modal -->
+    <div id="invoice-modal">
+      <div id="invoice-content">
+        <iframe id="invoice-iframe"></iframe>
+        <div id="invoice-buttons">
+          <button id="invoice-cancel">Close</button>
+          <button id="invoice-download">Download PDF</button>
+          <button id="invoice-print">Print</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Libraries (order matters) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <script>
+    /* ---------- Config & helpers ---------- */
+    const ADMIN_UIDS = new Set([
+      "In9nS195FPamjwoTM8aHDjJRq8r2",
+      "csKdZoNF3ufwPVNS1tUmeRFzCnF2",
+      "Jfv7ZLEp5ibImVdVcpglH9ZhWlK2",
+      "KzhMNBQPlOMcPhRAUOKNWRcbdjK2"
+    ]);
+    const $ = (id)=>document.getElementById(id);
+
+    const isAdminUser = ()=> !!auth.currentUser && ADMIN_UIDS.has(auth.currentUser.uid);
+
+    /* Firebase */
+    const firebaseConfig = {
+      apiKey: "AIzaSyBUl3_b1LPQ98uYnvkxJBAU-gE3Jj22X0I",
+      authDomain: "pro-bakery-tracker.firebaseapp.com",
+      databaseURL: "https://pro-bakery-tracker-default-rtdb.firebaseio.com",
+      projectId: "pro-bakery-tracker",
+      storageBucket: "pro-bakery-tracker.firebasestorage.app",
+      messagingSenderId: "676035266941",
+      appId: "1:676035266941:web:503224475b25d65e7b6414"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db   = firebase.database();   // RTDB for logs
+    const fs   = firebase.firestore();  // Firestore for catalog
+    const auth = firebase.auth();
+
+    // Surface page-wide JS errors into the status text
+    window.addEventListener('error', e=>{
+      const s = $("fb-status");
+      if (s) s.innerHTML = 'Firebase: <strong class="err">' + (e.message || 'script error') + '</strong>';
+    });
+
+    // Solid connection badge (RTDB .info/connected)
+    (function watchFirebaseConnection(){
+      const status = $("fb-status");
+      try{
+        db.ref(".info/connected").on("value",
+          snap => {
+            status.innerHTML = snap.val()
+              ? 'Firebase: <strong class="ok">connected</strong>'
+              : 'Firebase: <strong class="err">offline</strong>';
+          },
+          err => {
+            console.error("RTDB connection check failed:", err);
+            status.innerHTML = 'Firebase: <strong class="err">' + (err.code || 'error') + '</strong>';
+          }
+        );
+      }catch(e){
+        console.error("RTDB not available:", e);
+        status.innerHTML = 'Firebase: <strong class="err">rtdb-missing</strong>';
+      }
+    })();
+
+    function applyAuthUI(user){
+      const isAdmin = !!user && ADMIN_UIDS.has(user.uid);
+      document.body.classList.toggle("admin", isAdmin);
+      $("login-btn").textContent = user ? "Logout" : "Login";
+      // keep UI in sync after auth changes
+      if (typeof requestLoadLogs === "function") requestLoadLogs();
+      if (typeof refreshCatalogUI === "function") refreshCatalogUI();
+    }
+    auth.onAuthStateChanged(applyAuthUI);
+
+    $("login-btn").addEventListener("click", async ()=>{
+      if (auth.currentUser) {  // Logout path
+        await auth.signOut();
+        return;
+      }
+      // Login path
+      const email = prompt("Admin email:"); if (!email) return;
+      const pw    = prompt("Password:");   if (pw == null) return;
+      try {
+        await auth.signInWithEmailAndPassword(email.trim(), pw);
+      } catch (e) {
+        console.error(e);
+        alert("Login failed. Check email/password or account access.");
+      }
+    });
+
+    /* ---------- App data ---------- */
+    const locations = ["Beacon","Prohibition","Tulia Osteria","Ce Soir"];
+    let selectedMonth = new Date().toISOString().slice(0,7); // YYYY-MM
+
+    const unitSystems = {
+      case:{units:["case"],toBase:{case:1}},
+      each:{units:["each"],toBase:{each:1}},
+      piece:{units:["piece"],toBase:{piece:1}},
+      L:{units:["L","ml","fl oz"],toBase:{L:1, ml:1/1000, "fl oz":1/33.814}},
+      ml:{units:["ml","L","fl oz"],toBase:{ml:1, L:1000, "fl oz":1000/33.814}},
+      kg:{units:["kg","g","lb"],toBase:{kg:1, g:1/1000, lb:1/2.20462}},
+      g:{units:["g","kg","lb"],toBase:{g:1, kg:1000, lb:1000/2.20462}},
+      lb:{units:["lb","kg","g"],toBase:{lb:1, kg:2.20462, g:1/453.592}},
+      "fl oz":{units:["fl oz","L","ml"],toBase:{"fl oz":1, L:33.814, ml:0.033814}}
+    };
+    const allowedUnits = (baseUnit,useConversions)=>{
+      const sys = unitSystems[baseUnit] || {units:[baseUnit],toBase:{[baseUnit]:1}};
+      return useConversions ? sys.units : [baseUnit];
+    };
+    const priceForUnit = (pricePerBase, baseUnit, unit)=>{
+      const sys = unitSystems[baseUnit]; if(!sys) return pricePerBase;
+      return +(pricePerBase * (sys.toBase[unit]||1)).toFixed(4);
+    };
+
+    /* ---------- Catalog (Firestore) ---------- */
+    const catalog = new Map();
+    let catalogUnsub=null;
+
+    function subscribeCatalog(){
+      if (catalogUnsub) return;
+      catalogUnsub = fs.collection("catalog").onSnapshot(snap=>{
+        catalog.clear();
+        snap.forEach(d=> catalog.set(d.id, d.data()));
+        refreshCatalogUI();
+      });
+    }
+
+    function refreshCatalogUI(){
+      document.querySelectorAll('#items-container .item').forEach(row=>{
+        const sel = row.querySelector('select[name="product"]');
+        if (sel) populateProductSelect(sel,row);
+      });
+    }
+
+    /* ---------- UI helpers ---------- */
+    function fillSelect(sel, values){
+      sel.innerHTML = "";
+      values.forEach(v=>{ const o=document.createElement("option"); o.value=o.textContent=v; sel.appendChild(o); });
+    }
+
+    function populateProductSelect(selectEl,rowEl){
+      const prev = selectEl.value; selectEl.innerHTML="";
+      const items=[]; catalog.forEach((v,id)=>{ if(v.active) items.push({id,...v}); });
+      items.sort((a,b)=> (a.name||"").localeCompare(b.name||""));
+      if(items.length===0){
+        const o=document.createElement("option"); o.value=""; o.textContent="No products (add in catalog)"; selectEl.appendChild(o);
+      }else{
+        items.forEach(p=>{ const o=document.createElement("option"); o.value=p.id; o.textContent=p.name; selectEl.appendChild(o); });
+        if(prev && items.some(i=>i.id===prev)) selectEl.value=prev;
+      }
+      applyProductToRow(rowEl);
+    }
+
+    function applyProductToRow(rowEl){
+      const prodSel=rowEl.querySelector('select[name="product"]');
+      const unitSel=rowEl.querySelector('select[name="unit"]');
+      const cpuInput=rowEl.querySelector('input[name="cost"]');
+      const qtyInput=rowEl.querySelector('input[name="amount"]');
+      const totalDiv=rowEl.querySelector('.total-value');
+      const prod=catalog.get(prodSel.value);
+      unitSel.innerHTML="";
+      if(!prod){ cpuInput.value=""; totalDiv.textContent=""; return; }
+      allowedUnits(prod.baseUnit, !!prod.useConversions).forEach(u=>{ const o=document.createElement("option"); o.value=o.textContent=u; unitSel.appendChild(o); });
+      const recalc = ()=>{
+        const cpu = priceForUnit(Number(prod.pricePerBase||0), prod.baseUnit, unitSel.value);
+        cpuInput.value = Number(cpu).toFixed(2);
+        const qty = parseFloat(qtyInput.value);
+        totalDiv.textContent = !isNaN(qty) ? `Line Total: $${(qty*cpu).toFixed(2)}` : "";
+      };
+      unitSel.onchange=recalc; qtyInput.oninput=recalc; recalc();
+    }
+
+    function addItem(){
+      const row=document.createElement("div");
+      row.className="item";
+      row.innerHTML=`
+        <div class="row-line">
+          <label>Product <select name="product"></select></label>
+          <label>Amount <input type="number" name="amount" placeholder="0" min="0" step="0.01"></label>
+          <label>Unit <select name="unit"></select></label>
+          <div class="row-actions">
+            <button type="button" class="btn danger" data-del>Delete</button>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top:8px;">
+          <label>Cost per Unit <input type="number" step="0.01" name="cost" placeholder="$" readonly></label>
+          <div class="total-value" style="display:flex;align-items:flex-end"></div>
+        </div>`;
+      $("items-container").appendChild(row);
+      const prodSel=row.querySelector('select[name="product"]');
+      prodSel.onchange=()=>applyProductToRow(row);
+      populateProductSelect(prodSel,row);
+      row.querySelector('[data-del]').onclick=()=> row.remove();
+    }
+
+    /* ---------- Logs with Admin Edit/Delete ---------- */
+    let loadLogsRunId=0;
+    function requestLoadLogs(){ loadLogs(++loadLogsRunId); }
+
+    async function loadLogs(runId){
+      const myId=runId??++loadLogsRunId; const logsEl=$("logs"); const frag=document.createDocumentFragment();
+      $("current-month").textContent=selectedMonth;
+      const monthInput = $("report-month");
+      if (monthInput && !monthInput.value) monthInput.value = selectedMonth;
+
+      for(const store of locations){
+        const sec=document.createElement("div"); sec.className="item"; sec.innerHTML=`<h3 style="margin:0 0 8px">${store}</h3>`;
+        try{
+          const snap=await db.ref(`logs/${store}/${selectedMonth}`).once("value");
+          if(myId!==loadLogsRunId) return;
+          const data=snap.val();
+          if(data){
+            Object.entries(data).forEach(([k,l])=>{
+              const d=document.createElement("div");
+              d.className = l.completed ? "log-entry completed" : "log-entry";
+              const color=l.amount<0?"#ef4444":"#22c55e"; const display=l.amount<0?l.amount:`+${l.amount}`;
+              const canEdit = isAdminUser();
+              const actions = canEdit
+                ? `<span style="float:right; display:flex; gap:8px;">
+                     <button class="btn" data-edit="${k}" style="padding:4px 8px;">Edit</button>
+                     <button class="btn danger" data-del="${k}" style="padding:4px 8px;">Delete</button>
+                   </span>`
+                : "";
+              d.innerHTML = `
+                ${actions}
+                <span style="color:${color}">${display} ${l.unit} of ${l.product} (${l.date})</span>
+                ${l.comment ? `<div class="muted" style="margin-top:4px">${l.comment}</div>` : ""}
+              `;
+              // Wire admin actions
+              if (canEdit){
+                d.querySelector('[data-edit]')?.addEventListener('click', ()=>
+                  editLogBothStores(store, selectedMonth, k, l));
+                d.querySelector('[data-del]')?.addEventListener('click', ()=>
+                  deleteLogBothStores(store, selectedMonth, k, l.from, l.to));
+              }
+              sec.appendChild(d);
+            });
+          }else{
+            const none=document.createElement("div"); none.className="muted"; none.textContent="No entries."; sec.appendChild(none);
+          }
+        }catch(e){ console.error("Failed to load logs", e); }
+        frag.appendChild(sec);
+      }
+      if(myId!==loadLogsRunId) return;
+      logsEl.innerHTML=""; logsEl.appendChild(frag);
+    }
+
+    async function deleteLogBothStores(store, month, key, from, to){
+      if(!isAdminUser()) return alert("Admin login required.");
+      if(!confirm("Delete this transfer from both locations?")) return;
+      const updates = {};
+      updates[`logs/${from}/${month}/${key}`] = null;
+      updates[`logs/${to}/${month}/${key}`]   = null;
+      try{
+        await db.ref().update(updates);
+        requestLoadLogs();
+      }catch(e){
+        console.error("Delete failed:", e);
+        alert("Delete failed: " + (e?.code || e?.message || e));
+      }
+    }
+
+    async function editLogBothStores(store, month, key, entry){
+      if(!isAdminUser()) return alert("Admin login required.");
+      const newDate = prompt("Edit date (YYYY-MM-DD):", entry.date || ""); if(!newDate) return;
+      const absQtyStr = prompt("Edit quantity (positive number):", String(Math.abs(entry.amount || 0)));
+      const absQty = parseFloat(absQtyStr); if(!isFinite(absQty) || absQty < 0) return alert("Quantity must be a positive number.");
+      const unit = prompt("Edit unit:", entry.unit || ""); if(!unit) return;
+      const cpuStr = prompt("Edit cost per unit (number):", String(entry.costPerUnit ?? 0));
+      const cpu = parseFloat(cpuStr); if(!isFinite(cpu) || cpu < 0) return alert("Cost must be a non-negative number.");
+      const comment = prompt("Edit comment (optional):", entry.comment || "") || "";
+
+      const fromAmt = -Math.abs(absQty);
+      const toAmt   = +Math.abs(absQty);
+      const base = { date:newDate, unit, costPerUnit:cpu, comment, product: entry.product, from: entry.from, to: entry.to };
+      const updates = {};
+      updates[`logs/${entry.from}/${month}/${key}`] = { ...base, amount: fromAmt };
+      updates[`logs/${entry.to}/${month}/${key}`]   = { ...base, amount: toAmt   };
+      try{
+        await db.ref().update(updates);
+        requestLoadLogs();
+      }catch(e){
+        console.error("Edit failed:", e);
+        alert("Edit failed: " + (e?.code || e?.message || e));
+      }
+    }
+
+    async function addTransfer(){
+      const date=$("date").value; const from="Pro-Bakery"; const to=$("to").value;
+      if(!date||!to) return alert("Select a date and destination.");
+      selectedMonth=date.slice(0,7);
+
+      const groups=document.querySelectorAll('#items-container .item');
+      if (!groups.length) return alert("Add at least one item.");
+
+      // Permission guard: only alert when submitting
+      try{
+        const testKey = db.ref('logs').push().key;
+        await db.ref(`logs/__canwrite/${selectedMonth}/${testKey}`).set({ts:Date.now()});
+        await db.ref(`logs/__canwrite/${selectedMonth}/${testKey}`).remove();
+      }catch(e){
+        console.error("Write blocked on submit:", e);
+        alert("You’re not signed in to write to the database.\n\nClick Login (top-right) with an admin account, then try again.");
+        return;
+      }
+
+      try{
+        for(const g of groups){
+          const prodId=g.querySelector('[name="product"]').value;
+          const prod=catalog.get(prodId); const productName=prod?.name||"";
+          const amt=parseFloat(g.querySelector('[name="amount"]').value);
+          const unit=g.querySelector('[name="unit"]').value;
+          const cpu=parseFloat(g.querySelector('[name="cost"]').value);
+          if(!productName || isNaN(amt)) return alert("Complete all item fields.");
+          const key=db.ref('logs').push().key;
+          const out={date,from,to,product:productName,unit,costPerUnit:cpu,comment:"",amount:-amt};
+          const inn={date,from,to,product:productName,unit,costPerUnit:cpu,comment:"",amount: amt};
+          const upd={}; upd[`logs/${from}/${selectedMonth}/${key}`]=out; upd[`logs/${to}/${selectedMonth}/${key}`]=inn;
+          await db.ref().update(upd);
+        }
+      }catch(e){ console.error("Submit failed:", e); return alert("Submit failed: "+(e?.code||e?.message||e)); }
+
+      $("items-container").innerHTML=""; $("date").valueAsDate=new Date(); $("to").selectedIndex=0; addItem();
+      const monthInput = $("report-month");
+      if (monthInput) monthInput.value = selectedMonth;
+      requestLoadLogs();
+    }
+
+    /* ---------- Invoice ---------- */
+    async function buildRangeInvoice(){
+      const loc=$("inv-loc").value, s=$("inv-start").value, e=$("inv-end").value;
+      if(!loc) return alert("Choose a location."); if(!s||!e) return alert("Choose start and end dates.");
+      const start=new Date(s), end=new Date(e); if(end<start) return alert("End date must be after start date.");
+      let rows=[];
+      try{
+        const snap=await db.ref(`logs/${loc}`).once("value");
+        if(snap.exists()){
+          snap.forEach(m=> m.forEach(ls=>{
+            const l=ls.val(); if(!l) return; const d=new Date(l.date);
+            if(d>=start && d<=end){
+              const cpu=Number.isFinite(l.costPerUnit)?Number(l.costPerUnit):0;
+              const amt=Number(l.amount)||0; const counterparty=amt<0?l.to:l.from;
+              rows.push({date:l.date,direction:amt<0?"Out":"In",counterparty,product:l.product,qty:Math.abs(amt),unit:l.unit,cpu,lineValue:+(amt*cpu).toFixed(2)});
+            }
+          }));
+        }
+      }catch(err){ console.error("Range invoice read failed", err); return alert("Could not read transfers to build invoice."); }
+      if(!rows.length) return alert("No transfers found.");
+      rows.sort((a,b)=> a.date.localeCompare(b.date));
+      const incomingTotal=rows.filter(r=>r.direction==="In").reduce((s,r)=>s+r.lineValue,0);
+      const outgoingTotal=rows.filter(r=>r.direction==="Out").reduce((s,r)=>s+r.lineValue,0);
+      const netTotal=+(incomingTotal+outgoingTotal).toFixed(2);
+
+      const { jsPDF }=window.jspdf; const W_IN=10,H_IN=8;
+      const doc=new jsPDF({orientation:"landscape",unit:"pt",format:[W_IN*72,H_IN*72]});
+      const M=24,pageH=H_IN*72;
+      doc.setFont("helvetica","bold");doc.setFontSize(16);doc.text(`Invoice (All Transfers for ${loc})`,M,M+6);
+      doc.setFont("helvetica","normal");doc.setFontSize(10);
+      [`Location: ${loc}`,`Range: ${s} to ${e}`,`Generated: ${new Date().toISOString().slice(0,19).replace('T',' ')}`]
+        .forEach((t,i)=>doc.text(t,M,M+28+i*14));
+
+      const cols=[
+        {label:"Date",w:86,align:"left"}, {label:"Dir",w:38,align:"left"},
+        {label:"Counterparty",w:186,align:"left"}, {label:"Product",w:136,align:"left"},
+        {label:"Qty/Unit",w:70,align:"right"}, {label:"Unit $",w:66,align:"right"},
+        {label:"Total $",w:84,align:"right"}
+      ];
+      let x=M,y=M+86; const colX=cols.map(c=>{const cx=x;x+=c.w;return cx;});
+      doc.setFont("courier","bold");doc.setFontSize(9.5);
+      cols.forEach((c,i)=>{const hx=c.align==="right"?colX[i]+c.w:colX[i];doc.text(c.label,hx,y,c.align==="right"?{align:"right"}:undefined);});
+      doc.setFont("courier","normal");doc.setFontSize(9.5); const rowH=14; y+=rowH;
+      const clip=(s,w)=>{const t=String(s??"");const max=Math.floor(w/5.8);return t.length>max?t.slice(0,max-1)+"…":t;};
+
+      rows.forEach(r=>{
+        if(y>pageH-M*4){doc.addPage({orientation:"landscape",unit:"pt",format:[W_IN*72,H_IN*72]});
+          y=M; doc.setFont("courier","bold");doc.setFontSize(9.5);
+          cols.forEach((c,i)=>{const hx=c.align==="right"?colX[i]+c.w:colX[i];doc.text(c.label,hx,y,c.align==="right"?{align:"right"}:undefined);});
+          doc.setFont("courier","normal");doc.setFontSize(9.5); y+=rowH;}
+        const values=[r.date,r.direction,clip(r.counterparty,cols[2].w),clip(r.product,cols[3].w),
+          `${r.qty}${r.unit?" "+r.unit:""}`,`$${Number(r.cpu||0).toFixed(2)}`,
+          (r.lineValue>=0?"":"-")+`$${Math.abs(r.lineValue).toFixed(2)}`];
+        values.forEach((v,i)=>{const c=cols[i];const tx=c.align==="right"?colX[i]+c.w:colX[i];doc.text(String(v),tx,y,c.align==="right"?{align:"right"}:undefined);});
+        y+=rowH;
+      });
+
+      y=Math.max(y+rowH, pageH-M-rowH*3); doc.setFont("courier","bold");doc.setFontSize(10.5);
+      const put=(label,val)=>doc.text(`${label}: ${val}`, colX[colX.length-1]+cols[cols.length-1].w, y, {align:"right"});
+      put("Incoming Total", `$${Math.abs(incomingTotal).toFixed(2)}`); y+=rowH;
+      put("Outgoing Total", `-$${Math.abs(outgoingTotal).toFixed(2)}`); y+=rowH;
+      put("Net Total", (netTotal>=0?"":"-")+`$${Math.abs(netTotal).toFixed(2)}`);
+
+      $("invoice-iframe").src=doc.output("bloburi"); $("invoice-modal").style.display="block";
+      window.__lastPDF=doc; window.__lastPDFName=`Invoice_${loc}_${s}_${e}.pdf`;
+    }
+    $("invoice-cancel").onclick=()=>{ $("invoice-modal").style.display="none"; $("invoice-iframe").src="about:blank"; window.__lastPDF=null; window.__lastPDFName=null; };
+    $("invoice-download").onclick=()=>{ if(window.__lastPDF){ const blob=window.__lastPDF.output("blob"); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=window.__lastPDFName||"invoice.pdf"; a.click(); URL.revokeObjectURL(url);} };
+    $("invoice-print").onclick=()=>{ $("invoice-iframe").contentWindow?.focus(); $("invoice-iframe").contentWindow?.print(); };
+
+    function changeMonth(offset){
+      const [y,m]=selectedMonth.split("-").map(Number);
+      const d=new Date(y, m-1+offset);
+      selectedMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      $("current-month").textContent = selectedMonth;
+      const monthInput = $("report-month");
+      if (monthInput) monthInput.value = selectedMonth;
+      requestLoadLogs();
+    }
+    window.changeMonth=changeMonth;
+
+    /* ---------- Reports ---------- */
+
+    // NEW: monthly export uses selected month (from input) only
+    function exportExcel(){
+      const monthInput = $("report-month");
+      const monthKey = monthInput && monthInput.value ? monthInput.value : selectedMonth;
+      if (!monthKey){
+        alert("Select a month for the report.");
+        return;
+      }
+
+      db.ref("logs").once("value").then(snapshot=>{
+        const wb=XLSX.utils.book_new();
+        snapshot.forEach(storeSnap=>{
+          const rows=[];
+          const monthSnap = storeSnap.child(monthKey);
+          if (monthSnap.exists()){
+            monthSnap.forEach(log=>{
+              const l=log.val();
+              const tot=Number.isFinite(l.costPerUnit)?(l.amount*l.costPerUnit).toFixed(2):"";
+              rows.push([l.date,l.from,l.to,l.product,l.amount,l.unit,l.costPerUnit??"",tot,l.comment||""]);
+            });
+          }
+          if(rows.length){
+            const ws=XLSX.utils.aoa_to_sheet([["Date","From","To","Product","Amount","Unit","Cost","Total","Comment"],...rows]);
+            XLSX.utils.book_append_sheet(wb,ws,storeSnap.key.slice(0,31));
+          }
+        });
+        if (!wb.SheetNames.length){
+          alert("No transfers found for that month.");
+          return;
+        }
+        XLSX.writeFile(wb,`Transfers_${monthKey}.xlsx`);
+      }).catch(e=>{ console.error("Export failed",e); alert("Export failed (check connection)."); });
+    }
+    window.exportExcel=exportExcel;
+
+    function exportDateRange(){
+      const startD=new Date($("report-start").value), endD=new Date($("report-end").value);
+      if(isNaN(startD)||isNaN(endD)) return alert("Please select both start and end dates.");
+      db.ref("logs").once("value").then(snapshot=>{
+        const wb=XLSX.utils.book_new();
+        snapshot.forEach(store=>{
+          const rows=[];
+          store.forEach(month=> month.forEach(log=>{
+            const l=log.val(), d=new Date(l.date);
+            if(d>=startD && d<=endD){
+              const tot=Number.isFinite(l.costPerUnit)?(l.amount*l.costPerUnit).toFixed(2):"";
+              rows.push([l.date,l.from,l.to,l.product,l.amount,l.unit,l.costPerUnit??"",tot,l.comment||""]);
+            }
+          }));
+          if(rows.length){
+            const ws=XLSX.utils.aoa_to_sheet([["Date","From","To","Product","Amount","Unit","Cost","Total","Comment"],...rows]);
+            XLSX.utils.book_append_sheet(wb,ws,store.key.slice(0,31));
+          }
+        });
+        if (!wb.SheetNames.length){
+          alert("No transfers found for that date range.");
+          return;
+        }
+        XLSX.writeFile(wb,`Report_${$("report-start").value}_${$("report-end").value}.xlsx`);
+      }).catch(e=>{ console.error("Export by date failed",e); alert("Export by date failed (check connection)."); });
+    }
+    window.exportDateRange=exportDateRange;
+
+    /* ---------- Bootstrap ---------- */
+    (function setupUI(){
+      $("date").valueAsDate=new Date();
+      fillSelect($("to"),locations); fillSelect($("inv-loc"),locations);
+      const today=new Date().toISOString().slice(0,10);
+      $("report-start").value=today; $("report-end").value=today; $("inv-start").value=today; $("inv-end").value=today;
+      const monthInput = $("report-month");
+      if (monthInput) monthInput.value = selectedMonth;
+
+      $("add-item-btn").addEventListener("click", addItem);
+      $("submit-btn").addEventListener("click", addTransfer);
+      $("build-range-invoice").addEventListener("click", buildRangeInvoice);
+      addItem();
+      requestLoadLogs();
+      subscribeCatalog();
+    })();
+
+    /* Idle logout (only on real inactivity, not on page navigation) */
+    let idleTimeout;
+    const resetIdle = ()=>{ clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(async ()=>{ 
+        if(auth.currentUser){ 
+          await auth.signOut(); 
+          alert("You have been logged out due to 10 minutes of inactivity."); 
+        }
+      }, 10*60*1000);
+    };
+    ["mousemove","keydown","mousedown","touchstart","scroll"].forEach(evt=>document.addEventListener(evt, resetIdle,false));
+    resetIdle();
+  </script>
+</body>
+</html>
