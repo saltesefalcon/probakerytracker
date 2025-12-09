@@ -23,7 +23,7 @@
     .section h2{margin:4px 0 10px;font-size:1.1rem;color:var(--gold)}
     .row{display:flex;gap:10px;flex-wrap:wrap}
 
-    /* Make labels stack like the other inputs, so Unit aligns */
+    /* Labels stack so Unit line up with others */
     label{
       display:flex;
       flex-direction:column;
@@ -50,7 +50,7 @@
 
     .item{background:var(--card);border:1px solid var(--line);padding:12px;border-radius:12px;margin-bottom:12px;position:relative}
 
-    /* Row: Product | Amount | Unit | [Delete] — equal widths for first three */
+    /* Row: Product | Amount | Unit | [Delete] */
     .item .row-line{
       display:grid;
       grid-template-columns: 1fr 1fr 1fr auto;
@@ -63,7 +63,6 @@
       display:flex;
       gap:8px;
     }
-    /* Let Unit dropdown expand like others; cap only on small screens */
     .item select[name="unit"]{ max-width:100%; }
 
     @media (max-width:700px){
@@ -227,7 +226,7 @@
       if (s) s.innerHTML = 'Firebase: <strong class="err">' + (e.message || 'script error') + '</strong>';
     });
 
-    // Solid connection badge (RTDB .info/connected)
+    // RTDB connection badge
     (function watchFirebaseConnection(){
       const status = $("fb-status");
       try{
@@ -273,21 +272,6 @@
         alert("Login failed. Check email/password or account access.");
       }
     });
-
-    // Probe a tiny write: update the badge, but DO NOT alert on load
-    (function writeProbe(){
-      const month = new Date().toISOString().slice(0,7);
-      try{
-        const ref = db.ref(`logs/__probe/${month}`).push();
-        const row = { date:"1970-01-01", from:"__probe", to:"__probe", product:"probe", unit:"unit", amount:0 };
-        ref.set(row).then(()=>ref.remove()).catch(e=>{
-          console.warn("Write probe failed:", e);
-          $("fb-status").innerHTML = 'Firebase: <strong class="err">connected (no write)</strong>';
-        });
-      }catch(e){
-        console.warn("RTDB write probe skipped:", e);
-      }
-    })();
 
     /* ---------- App data ---------- */
     const locations = ["Beacon","Prohibition","Tulia Osteria","Ce Soir"];
@@ -653,14 +637,18 @@
       subscribeCatalog();
     })();
 
-    /* Idle logout */
+    /* Idle logout (keep this – removes users after 10 minutes idle) */
     let idleTimeout;
     const resetIdle = ()=>{ clearTimeout(idleTimeout);
-      idleTimeout = setTimeout(async ()=>{ if(auth.currentUser){ await auth.signOut(); alert("You have been logged out due to 10 minutes of inactivity."); }}, 10*60*1000);
+      idleTimeout = setTimeout(async ()=>{ 
+        if(auth.currentUser){ 
+          await auth.signOut(); 
+          alert("You have been logged out due to 10 minutes of inactivity."); 
+        }
+      }, 10*60*1000);
     };
     ["mousemove","keydown","mousedown","touchstart","scroll"].forEach(evt=>document.addEventListener(evt, resetIdle,false));
     resetIdle();
-    window.addEventListener("beforeunload", async()=>{ if(auth.currentUser){ await auth.signOut(); }});
   </script>
 </body>
 </html>
